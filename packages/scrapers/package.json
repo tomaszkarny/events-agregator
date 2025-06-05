@@ -1,0 +1,30 @@
+{
+  "name": "@events-agregator/scrapers",
+  "version": "0.1.0",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "scrape": "tsx src/run-scraper.ts",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@events-agregator/database": "*",
+    "@events-agregator/shared": "*",
+    "axios": "^1.7.9",
+    "bullmq": "^5.35.3",
+    "ioredis": "^5.4.2",
+    "cheerio": "1.0.0",
+    "date-fns": "^4.1.0",
+    "dotenv": "^16.4.7",
+    "playwright": "^1.49.1",
+    "rss-parser": "^3.13.0",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
