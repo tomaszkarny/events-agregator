@@ -2,15 +2,18 @@ import { Request, Response, NextFunction } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { AppError } from './errorHandler'
 
+// IMPORTANT: Using anon key for user operations (security fix)
+// Service role key should ONLY be used for admin operations
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
 export interface AuthRequest extends Request {
   user?: {
     id: string
     email: string
+    name?: string
     role: string
   }
 }
@@ -36,6 +39,7 @@ export const authenticate = async (
     req.user = {
       id: user.id,
       email: user.email!,
+      name: user.user_metadata?.name || user.email?.split('@')[0],
       role: user.user_metadata?.role || 'user'
     }
 

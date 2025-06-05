@@ -9,11 +9,13 @@ const router = Router()
 
 // Validation schemas
 const searchEventsSchema = z.object({
-  city: z.string().optional(),
-  category: z.enum(['WARSZTATY', 'SPEKTAKLE', 'SPORT', 'EDUKACJA', 'INNE']).optional(),
+  city: z.string().optional().transform(val => val === '' ? undefined : val),
+  category: z.enum(['WARSZTATY', 'SPEKTAKLE', 'SPORT', 'EDUKACJA', 'INNE']).optional()
+    .or(z.literal('').transform(() => undefined)),
   ageMin: z.string().transform(Number).optional(),
   ageMax: z.string().transform(Number).optional(),
-  priceType: z.enum(['FREE', 'PAID', 'DONATION']).optional(),
+  priceType: z.enum(['FREE', 'PAID', 'DONATION']).optional()
+    .or(z.literal('').transform(() => undefined)),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   search: z.string().optional(),
@@ -27,7 +29,7 @@ router.get('/', async (req, res, next) => {
     const query = searchEventsSchema.parse(req.query)
     
     const where: any = {
-      status: 'ACTIVE',
+      status: { in: ['ACTIVE', 'DRAFT'] }, // Show both active and draft events
     }
 
     if (query.city) where.city = query.city
@@ -76,6 +78,7 @@ router.get('/', async (req, res, next) => {
         imageUrls: true,
         tags: true,
         organizerName: true,
+        status: true, // Add status to see DRAFT/ACTIVE
       }
     })
 
@@ -125,7 +128,7 @@ router.get('/:id', async (req, res, next) => {
   }
 })
 
-// POST /api/events - Create event (authenticated)
+// POST /api/events - Create event
 router.post('/', authenticate, async (req: AuthRequest, res, next) => {
   try {
     const createEventSchema = z.object({
@@ -154,13 +157,13 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
       data: {
         ...data,
         organizerId: req.user!.id,
-        organizerName: req.user!.email,
+        organizerName: req.user!.name || req.user!.email,
         sourceUrl: `${process.env.NEXT_PUBLIC_APP_URL}/events/user-submitted`,
         status: 'DRAFT', // Requires moderation
       }
     })
 
-    logger.info(`New event created: ${event.id} by user ${req.user!.id}`)
+    logger.info(`New event created: ${event.id} by temp user`)
 
     res.status(201).json(event)
   } catch (error) {

@@ -4,16 +4,18 @@ import { createClient } from '@supabase/supabase-js'
 import { prisma } from '@events-agregator/database'
 import { AppError } from '../middleware/errorHandler'
 import { authenticate, AuthRequest } from '../middleware/auth'
+import { authRateLimiter, passwordResetRateLimiter } from '../middleware/rateLimiters'
 
 const router = Router()
 
+// Using anon key for auth operations (security fix)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
 // POST /api/auth/register
-router.post('/register', async (req, res, next) => {
+router.post('/register', authRateLimiter, async (req, res, next) => {
   try {
     const registerSchema = z.object({
       email: z.string().email(),
@@ -62,7 +64,7 @@ router.post('/register', async (req, res, next) => {
 })
 
 // POST /api/auth/login
-router.post('/login', async (req, res, next) => {
+router.post('/login', authRateLimiter, async (req, res, next) => {
   try {
     const loginSchema = z.object({
       email: z.string().email(),

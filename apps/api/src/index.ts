@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 import { prisma } from '@events-agregator/database'
 import { logger } from './utils/logger'
 import { errorHandler } from './middleware/errorHandler'
-import { rateLimiter } from './middleware/rateLimiter'
+import { standardRateLimiter } from './middleware/rateLimiters'
 import eventsRouter from './routes/events'
 import authRouter from './routes/auth'
 import alertsRouter from './routes/alerts'
@@ -19,11 +19,24 @@ const PORT = process.env.API_PORT || 4000
 // Middleware
 app.use(helmet())
 app.use(cors({
-  origin: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+  origin: function(origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:3002',
+      process.env.NEXT_PUBLIC_APP_URL
+    ].filter(Boolean)
+    
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true)
+    } else {
+      callback(new Error('Not allowed by CORS'))
+    }
+  },
   credentials: true
 }))
-app.use(express.json())
-app.use(rateLimiter)
+app.use(express.json({ limit: '10mb' }))
+app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+app.use(standardRateLimiter)
 
 // Health check
 app.get('/health', (req, res) => {
