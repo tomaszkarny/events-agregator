@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { useEvents } from '@/hooks/use-events'
 import { POLISH_CITIES, EVENT_CATEGORIES } from '@events-agregator/shared'
+import { Header } from '@/components/header'
+import { EventCard } from '@/components/event-card'
 
 export default function Home() {
   const [filters, setFilters] = useState({
@@ -12,21 +13,16 @@ export default function Home() {
     search: '',
   })
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['events', filters],
-    queryFn: () => api.searchEvents(filters),
+  const { data, isLoading, error } = useEvents({
+    ...filters,
+    limit: 25,
+    offset: 0
   })
 
   return (
     <main className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <h1 className="text-3xl font-bold text-gray-900">
-            Agregator Wydarzeń dla Dzieci
-          </h1>
-        </div>
-      </header>
+      <Header />
+
 
       {/* Filters */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -101,51 +97,8 @@ export default function Home() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {data?.items.map((event: any) => (
-              <div
-                key={event.id}
-                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-              >
-                {event.imageUrls[0] && (
-                  <img
-                    src={event.imageUrls[0]}
-                    alt={event.title}
-                    className="w-full h-48 object-cover"
-                  />
-                )}
-                <div className="p-4">
-                  <h2 className="text-xl font-semibold mb-2">{event.title}</h2>
-                  <p className="text-gray-600 text-sm mb-2">
-                    {new Date(event.startDate).toLocaleDateString('pl-PL', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </p>
-                  <p className="text-gray-600 text-sm mb-2">
-                    📍 {event.city}, {event.locationName}
-                  </p>
-                  <p className="text-gray-600 text-sm mb-2">
-                    👶 Wiek: {event.ageMin}-{event.ageMax} lat
-                  </p>
-                  <div className="flex justify-between items-center mt-4">
-                    <span className={`inline-block px-3 py-1 rounded-full text-sm ${
-                      event.priceType === 'FREE'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-blue-100 text-blue-800'
-                    }`}>
-                      {event.priceType === 'FREE' ? 'Bezpłatne' : `${event.price} zł`}
-                    </span>
-                    <button
-                      onClick={() => api.trackClick(event.id)}
-                      className="text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Zobacz więcej →
-                    </button>
-                  </div>
-                </div>
-              </div>
+            {data?.items.map((event) => (
+              <EventCard key={event.id} event={event} />
             ))}
           </div>
         )}

@@ -14,9 +14,13 @@
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.48.0",
     "@tanstack/react-query": "^5.62.11",
+    "@types/dompurify": "^3.0.5",
+    "isomorphic-dompurify": "^2.25.0",
     "next": "15.1.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "react-hot-toast": "^2.5.2",
+    "zod": "^3.25.49",
     "zustand": "^5.0.2"
   },
   "devDependencies": {

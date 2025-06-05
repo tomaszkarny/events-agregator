@@ -1,3 +1,5 @@
+import { EventsSearchResponse, EventApiResponse, UserProfile } from './types'
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000'
 
 export interface ApiError {
@@ -46,15 +48,11 @@ class ApiClient {
       }
     })
 
-    return this.request<{
-      items: any[]
-      nextCursor: string | null
-      hasMore: boolean
-    }>(`/events?${query}`)
+    return this.request<EventsSearchResponse>(`/events?${query}`)
   }
 
   async getEvent(id: string) {
-    return this.request<any>(`/events/${id}`)
+    return this.request<EventApiResponse>(`/events/${id}`)
   }
 
   async trackClick(eventId: string) {
@@ -63,10 +61,20 @@ class ApiClient {
     })
   }
 
+  async createEvent(token: string, data: Partial<EventApiResponse>) {
+    return this.request<EventApiResponse>('/events', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    })
+  }
+
   // Auth
   async login(email: string, password: string) {
     return this.request<{
-      user: any
+      user: UserProfile
       session: any
     }>('/auth/login', {
       method: 'POST',
@@ -76,7 +84,7 @@ class ApiClient {
 
   async register(email: string, password: string, name?: string) {
     return this.request<{
-      user: any
+      user: UserProfile
       session: any
     }>('/auth/register', {
       method: 'POST',
@@ -85,7 +93,7 @@ class ApiClient {
   }
 
   async getProfile(token: string) {
-    return this.request<any>('/auth/profile', {
+    return this.request<UserProfile>('/auth/profile', {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -103,15 +111,15 @@ class ApiClient {
 
   // Alerts
   async getAlerts(token: string) {
-    return this.request<any[]>('/alerts', {
+    return this.request<Array<{id: string; name: string; filters: any}>>('/alerts', {
       headers: {
         Authorization: `Bearer ${token}`,
       },
     })
   }
 
-  async createAlert(token: string, data: any) {
-    return this.request<any>('/alerts', {
+  async createAlert(token: string, data: {name: string; filters: any; frequency: string; channels: string[]}) {
+    return this.request<{id: string; name: string; filters: any}>('/alerts', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -120,8 +128,8 @@ class ApiClient {
     })
   }
 
-  async updateAlert(token: string, id: string, data: any) {
-    return this.request<any>(`/alerts/${id}`, {
+  async updateAlert(token: string, id: string, data: Partial<{name: string; filters: any; frequency: string; channels: string[]}>) {
+    return this.request<{id: string; name: string; filters: any}>(`/alerts/${id}`, {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${token}`,
