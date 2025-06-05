@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
-import { prisma } from '@events-agregator/database'
+import { createClient } from '@supabase/supabase-js'
 import { AppError } from '../middleware/errorHandler'
 import { authenticate, AuthRequest } from '../middleware/auth'
 import { logger } from '../utils/logger'

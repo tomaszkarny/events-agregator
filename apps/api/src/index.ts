@@ -1,17 +1,16 @@
+import dotenv from 'dotenv'
+dotenv.config()
+
 import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
-import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
-import { prisma } from '@events-agregator/database'
 import { logger } from './utils/logger'
 import { errorHandler } from './middleware/errorHandler'
-import { standardRateLimiter } from './middleware/rateLimiters'
+import { standardRateLimiter } from './middleware/rateLimiter'
 import eventsRouter from './routes/events'
 import authRouter from './routes/auth'
 import alertsRouter from './routes/alerts'
-
-dotenv.config()
 
 const app = express()
 const PORT = process.env.API_PORT || 4000

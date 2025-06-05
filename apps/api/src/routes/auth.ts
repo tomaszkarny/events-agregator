@@ -1,17 +1,19 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { createClient } from '@supabase/supabase-js'
-import { prisma } from '@events-agregator/database'
 import { AppError } from '../middleware/errorHandler'
 import { authenticate, AuthRequest } from '../middleware/auth'
-import { authRateLimiter, passwordResetRateLimiter } from '../middleware/rateLimiters'
+import { authRateLimiter, passwordResetRateLimiter } from '../middleware/rateLimiter'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 const router = Router()
 
 // Using anon key for auth operations (security fix)
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
 )
 
 // POST /api/auth/register

@@ -1,12 +1,15 @@
 import { Request, Response, NextFunction } from 'express'
 import { createClient } from '@supabase/supabase-js'
 import { AppError } from './errorHandler'
+import dotenv from 'dotenv'
+
+dotenv.config()
 
 // IMPORTANT: Using anon key for user operations (security fix)
 // Service role key should ONLY be used for admin operations
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
 )
 
 export interface AuthRequest extends Request {
