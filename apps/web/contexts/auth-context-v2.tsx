@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState } from 'react'
-import { User, Session } from '@supabase/supabase-js'
+import { User, Session, AuthChangeEvent } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase-client'
 import { getProfile } from '@/lib/supabase-queries'
 import type { Database } from '../../../lib/supabase-types'
@@ -27,6 +27,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  
+  // Add debug logging
+  useEffect(() => {
+    console.log('AuthProvider state:', { user: user?.email, loading, session: !!session })
+  }, [user, loading, session])
 
   // Load user profile
   const loadProfile = async (userId: string) => {
@@ -42,24 +47,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    // Only run on client side
+    if (typeof window === 'undefined') {
+      console.log('AuthProvider: Skipping - not on client')
+      return
+    }
+    
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        loadProfile(session.user.id)
+    console.log('AuthProvider: Getting initial session...')
+    const initAuth = async () => {
+      // Add timeout to prevent infinite hanging
+      const timeoutId = setTimeout(() => {
+        console.warn('AuthProvider: Session check timed out after 5s')
+        setLoading(false)
+      }, 5000)
+      
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        clearTimeout(timeoutId)
+        console.log('AuthProvider: Session response:', { 
+          hasSession: !!session, 
+          hasError: !!error,
+          errorMessage: error?.message 
+        })
+        
+        if (error) {
+          console.error('AuthProvider: Session error:', error)
+          // Don't fail hard on auth errors - allow app to load
+          setLoading(false)
+          return
+        }
+        
+        setSession(session)
+        setUser(session?.user ?? null)
+        
+        if (session?.user) {
+          // Load profile but don't block on it
+          loadProfile(session.user.id).catch(err => {
+            console.warn('AuthProvider: Profile load failed:', err)
+          })
+        }
+      } catch (error) {
+        console.error('AuthProvider: Error initializing auth:', error)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
-    })
+    }
+    
+    initAuth()
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, session: Session | null) => {
       console.log('Auth event:', event)
       setSession(session)
       setUser(session?.user ?? null)
       
       if (session?.user) {
-        await loadProfile(session.user.id)
+        // Load profile but don't block on it
+        loadProfile(session.user.id).catch(err => {
+          console.warn('AuthProvider: Profile load failed on auth change:', err)
+        })
       } else {
         setProfile(null)
       }

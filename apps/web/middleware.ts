@@ -32,7 +32,18 @@ export async function middleware(request: NextRequest) {
   )
 
   // This will refresh session if expired - required for Server Components
-  await supabase.auth.getUser()
+  // Add timeout protection to prevent hanging
+  try {
+    const authPromise = supabase.auth.getUser()
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Auth check timeout')), 3000)
+    })
+    
+    await Promise.race([authPromise, timeoutPromise])
+  } catch (error) {
+    console.warn('Middleware auth check failed or timed out:', error)
+    // Continue anyway - don't block the request
+  }
 
   return response
 }

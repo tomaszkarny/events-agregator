@@ -1,4 +1,4 @@
-import { createClient } from './supabase-client'
+import { supabase } from './supabase-client'
 
 // Define types locally for now
 interface Event {
@@ -14,6 +14,7 @@ interface Event {
   age_max: number
   price_type: 'FREE' | 'PAID' | 'DONATION'
   price?: number
+  currency?: string
   category: string
   tags: string[]
   image_urls?: string[]
@@ -81,61 +82,108 @@ export async function searchEvents(params: {
   limit?: number
   offset?: number
 }) {
-  const supabase = createClient()
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : 'server'
+  console.log('searchEvents called with params:', params)
+  console.log('Running on hostname:', hostname, 'href:', typeof window !== 'undefined' ? window.location.href : 'server')
   
-  let query = supabase
-    .from('events')
-    .select('*', { count: 'exact' })
-    .in('status', ['ACTIVE', 'DRAFT'])
-    .order('start_date', { ascending: true })
-
-  if (params.city) {
-    query = query.eq('city', params.city)
-  }
-
-  if (params.category) {
-    query = query.eq('category', params.category)
-  }
-
-  if (params.priceType) {
-    query = query.eq('price_type', params.priceType)
-  }
-
-  if (params.ageMin) {
-    query = query.gte('age_max', params.ageMin)
-  }
-
-  if (params.ageMax) {
-    query = query.lte('age_min', params.ageMax)
-  }
-
-  if (params.search) {
-    query = query.or(`title.ilike.%${params.search}%,description.ilike.%${params.search}%`)
-  }
-
-  const limit = params.limit || 25
-  const offset = params.offset || 0
-
-  query = query.range(offset, offset + limit - 1)
-
-  const { data, error, count } = await query
-
-  if (error) {
-    console.error('Supabase query error:', error)
-    throw error
-  }
-
-  const transformedItems = (data || []).map(transformEvent)
-
-  return {
-    items: transformedItems,
-    total: count || 0,
-    hasMore: (count || 0) > offset + limit
+  try {
+    console.log('Starting events query with full filtering...')
+    
+    // Start with base query - select all fields for complete event data
+    let query = supabase
+      .from('events')
+      .select('*', { count: 'exact' })
+    
+    // CRITICAL: Only show ACTIVE events to public users
+    console.log('Applying status filter: ACTIVE only')
+    query = query.eq('status', 'ACTIVE')
+    
+    // Apply filters conditionally
+    if (params.city && params.city.trim()) {
+      console.log('Applying city filter:', params.city.trim())
+      query = query.eq('city', params.city.trim())
+    }
+    
+    if (params.category && params.category.trim()) {
+      console.log('Applying category filter:', params.category.trim().toUpperCase())
+      query = query.eq('category', params.category.trim().toUpperCase())
+    }
+    
+    if (params.priceType && params.priceType.trim()) {
+      console.log('Applying price type filter:', params.priceType.trim().toUpperCase())
+      query = query.eq('price_type', params.priceType.trim().toUpperCase())
+    }
+    
+    // Text search across multiple fields
+    if (params.search && params.search.trim()) {
+      const searchTerm = params.search.trim()
+      console.log('Applying text search:', searchTerm)
+      query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,location_name.ilike.%${searchTerm}%`)
+    }
+    
+    // Age range filtering (overlapping ranges)
+    if (params.ageMin !== undefined) {
+      console.log('Applying age min filter:', params.ageMin)
+      query = query.lte('age_min', params.ageMin)
+    }
+    if (params.ageMax !== undefined) {
+      console.log('Applying age max filter:', params.ageMax)
+      query = query.gte('age_max', params.ageMax)
+    }
+    
+    // Ordering: upcoming events first, then by creation date
+    console.log('Applying ordering: start_date ASC, created_at DESC')
+    query = query.order('start_date', { ascending: true })
+    query = query.order('created_at', { ascending: false })
+    
+    // Pagination
+    const limit = params.limit || 25
+    const offset = params.offset || 0
+    console.log('Applying pagination:', { limit, offset, range: [offset, offset + limit - 1] })
+    query = query.range(offset, offset + limit - 1)
+    
+    console.log('Executing complete query with all filters...')
+    const { data, error, count } = await query
+    
+    console.log('Raw query result:', { 
+      hasData: !!data, 
+      dataLength: data?.length, 
+      hasError: !!error, 
+      errorDetails: error,
+      totalCount: count,
+      hasMore: (offset + limit) < (count || 0)
+    })
+    
+    if (error) {
+      console.error('Supabase query error:', error)
+      return {
+        items: [],
+        total: 0,
+        hasMore: false
+      }
+    }
+    
+    console.log('Query succeeded, processing data...')
+    const transformedItems = (data || []).map(transformEvent)
+    console.log('Transformed items count:', transformedItems.length)
+    
+    return {
+      items: transformedItems,
+      total: count || 0,
+      hasMore: (offset + limit) < (count || 0)
+    }
+    
+  } catch (err: any) {
+    console.error('searchEvents error:', err)
+    return {
+      items: [],
+      total: 0,
+      hasMore: false
+    }
   }
 }
 
 export async function getEvent(id: string) {
-  const supabase = createClient()
   const { data, error } = await supabase
     .from('events')
     .select(`
@@ -180,7 +228,6 @@ export async function createEvent(event: Partial<Event>) {
 }
 
 export async function updateEvent(id: string, updates: Partial<Event>) {
-  const supabase = createClient()
   const { data, error } = await supabase
     .from('events')
     .update(updates)
@@ -193,7 +240,6 @@ export async function updateEvent(id: string, updates: Partial<Event>) {
 }
 
 export async function deleteEvent(id: string) {
-  const supabase = createClient()
   const { error } = await supabase
     .from('events')
     .delete()
@@ -203,7 +249,6 @@ export async function deleteEvent(id: string) {
 }
 
 export async function trackEventClick(id: string) {
-  const supabase = createClient()
   const { data, error } = await supabase
     .rpc('increment', {
       table_name: 'events',
@@ -222,7 +267,6 @@ export async function trackEventClick(id: string) {
 
 // User queries
 export async function getProfile(userId?: string) {
-  const supabase = createClient()
   const id = userId || (await supabase.auth.getUser()).data.user?.id
   
   if (!id) {
@@ -254,7 +298,6 @@ export async function getProfile(userId?: string) {
 }
 
 export async function updateProfile(updates: Partial<Profile>) {
-  const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) throw new Error('Not authenticated')
@@ -267,12 +310,11 @@ export async function updateProfile(updates: Partial<Profile>) {
     .single()
 
   if (error) throw error
-  return transformEvent(data)
+  return data
 }
 
 // Favorites
 export async function toggleFavorite(eventId: string) {
-  const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) throw new Error('Not authenticated')
@@ -310,7 +352,6 @@ export async function toggleFavorite(eventId: string) {
 }
 
 export async function getUserEvents(userId?: string) {
-  const supabase = createClient()
   const id = userId || (await supabase.auth.getUser()).data.user?.id
   
   if (!id) throw new Error('No user ID provided')
@@ -326,7 +367,6 @@ export async function getUserEvents(userId?: string) {
 }
 
 export async function getUserFavorites(userId?: string) {
-  const supabase = createClient()
   const id = userId || (await supabase.auth.getUser()).data.user?.id
   
   if (!id) throw new Error('No user ID provided')
@@ -341,5 +381,78 @@ export async function getUserFavorites(userId?: string) {
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return data?.map(item => transformEvent(item.events)).filter(Boolean) || []
+  return data?.map((item: any) => transformEvent(item.events)).filter(Boolean) || []
+}
+
+// Child Profiles
+export async function getChildProfiles(userId?: string) {
+  const id = userId || (await supabase.auth.getUser()).data.user?.id
+  
+  if (!id) throw new Error('No user ID provided')
+
+  const { data, error } = await supabase
+    .from('child_profiles')
+    .select('*')
+    .eq('parent_id', id)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
+
+export async function createChildProfile(childData: {
+  name: string
+  age: number
+  interests?: string[]
+}) {
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) throw new Error('Not authenticated')
+
+  const { data, error } = await supabase
+    .from('child_profiles')
+    .insert({
+      ...childData,
+      parent_id: user.id
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function updateChildProfile(id: string, updates: {
+  name?: string
+  age?: number
+  interests?: string[]
+}) {
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) throw new Error('Not authenticated')
+
+  const { data, error } = await supabase
+    .from('child_profiles')
+    .update(updates)
+    .eq('id', id)
+    .eq('parent_id', user.id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function deleteChildProfile(id: string) {
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await supabase
+    .from('child_profiles')
+    .delete()
+    .eq('id', id)
+    .eq('parent_id', user.id)
+
+  if (error) throw error
 }

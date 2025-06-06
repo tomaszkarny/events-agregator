@@ -4,7 +4,24 @@ import { searchEvents, getEvent, createEvent, updateEvent, deleteEvent, trackEve
 export function useEvents(params: Parameters<typeof searchEvents>[0]) {
   return useQuery({
     queryKey: ['events', params],
-    queryFn: () => searchEvents(params),
+    queryFn: async () => {
+      console.log('useEvents queryFn starting...')
+      
+      // Add timeout protection for React Query
+      const queryPromise = searchEvents(params)
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('React Query timeout after 8 seconds')), 8000)
+      })
+      
+      const result = await Promise.race([queryPromise, timeoutPromise])
+      console.log('useEvents queryFn completed:', result)
+      return result
+    },
+    retry: 1, // Reduce retries for faster debugging
+    retryDelay: 1000, // Shorter delay
+    staleTime: 30000,
+    gcTime: 5 * 60 * 1000, // 5 minutes (renamed from cacheTime)
+    refetchOnWindowFocus: false, // Disable for debugging
   })
 }
 
