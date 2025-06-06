@@ -42,3 +42,13 @@ export interface UserProfile {
   createdAt: string
   updatedAt: string
 }
+
+export interface ChildProfile {
+  id: string
+  userId: string
+  name: string
+  age: number
+  interests: string[]
+  createdAt: string
+  updatedAt: string
+}

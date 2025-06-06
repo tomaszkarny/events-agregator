@@ -27,12 +27,13 @@ export const errorHandler = (
       method: req.method
     })
 
-    return res.status(err.statusCode).json({
+    res.status(err.statusCode).json({
       error: {
         message: err.message,
         status: err.statusCode
       }
     })
+    return
   }
 
   logger.error({

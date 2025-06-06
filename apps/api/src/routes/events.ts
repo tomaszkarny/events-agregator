@@ -198,6 +198,95 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
   }
 })
 
+// PUT /api/events/:id - Update event
+router.put('/:id', authenticate, async (req: AuthRequest, res, next) => {
+  try {
+    const updateEventSchema = z.object({
+      title: z.string().min(3).max(200).optional(),
+      description: z.string().min(10).max(5000).optional(),
+      ageMin: z.number().min(0).max(18).optional(),
+      ageMax: z.number().min(0).max(18).optional(),
+      priceType: z.enum(['FREE', 'PAID', 'DONATION']).optional(),
+      price: z.number().optional(),
+      currency: z.string().optional(),
+      locationName: z.string().optional(),
+      address: z.string().optional(),
+      city: z.string().optional(),
+      lat: z.number().optional(),
+      lng: z.number().optional(),
+      startDate: z.string().transform(str => new Date(str)).optional(),
+      endDate: z.string().transform(str => new Date(str)).optional(),
+      category: z.enum(['WARSZTATY', 'SPEKTAKLE', 'SPORT', 'EDUKACJA', 'INNE']).optional(),
+      imageUrls: z.array(z.string().url()).max(5).optional(),
+      tags: z.array(z.string()).max(10).optional(),
+    })
+
+    // First, verify ownership
+    const { data: existingEvent, error: fetchError } = await supabase
+      .from('events')
+      .select('organizer_id, status')
+      .eq('id', req.params.id)
+      .single()
+
+    if (fetchError || !existingEvent) {
+      throw new AppError('Event not found', 404)
+    }
+
+    if (existingEvent.organizer_id !== req.user!.id) {
+      throw new AppError('Not authorized to update this event', 403)
+    }
+
+    const data = updateEventSchema.parse(req.body)
+
+    // Transform camelCase to snake_case for database
+    const dbUpdates: any = {}
+    
+    if (data.title !== undefined) dbUpdates.title = data.title
+    if (data.description !== undefined) dbUpdates.description = data.description
+    if (data.ageMin !== undefined) dbUpdates.age_min = data.ageMin
+    if (data.ageMax !== undefined) dbUpdates.age_max = data.ageMax
+    if (data.priceType !== undefined) dbUpdates.price_type = data.priceType
+    if (data.price !== undefined) dbUpdates.price = data.price
+    if (data.currency !== undefined) dbUpdates.currency = data.currency
+    if (data.locationName !== undefined) dbUpdates.location_name = data.locationName
+    if (data.address !== undefined) dbUpdates.address = data.address
+    if (data.city !== undefined) dbUpdates.city = data.city
+    if (data.lat !== undefined) dbUpdates.lat = data.lat
+    if (data.lng !== undefined) dbUpdates.lng = data.lng
+    if (data.startDate !== undefined) dbUpdates.start_date = data.startDate
+    if (data.endDate !== undefined) dbUpdates.end_date = data.endDate
+    if (data.category !== undefined) dbUpdates.category = data.category
+    if (data.imageUrls !== undefined) dbUpdates.image_urls = data.imageUrls
+    if (data.tags !== undefined) dbUpdates.tags = data.tags
+
+    // Add updated timestamp
+    dbUpdates.updated_at = new Date()
+
+    // If event was previously ACTIVE and has been modified, set back to DRAFT for re-moderation
+    if (existingEvent.status === 'ACTIVE') {
+      dbUpdates.status = 'DRAFT'
+    }
+
+    const { data: updatedEvent, error } = await supabase
+      .from('events')
+      .update(dbUpdates)
+      .eq('id', req.params.id)
+      .select()
+      .single()
+    
+    if (error) throw error
+
+    logger.info(`Event updated: ${updatedEvent.id} by user ${req.user!.id}`)
+
+    res.json(updatedEvent)
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return next(new AppError(error.errors[0].message, 400))
+    }
+    next(error)
+  }
+})
+
 // POST /api/events/:id/click - Track click
 router.post('/:id/click', async (req, res, next) => {
   try {

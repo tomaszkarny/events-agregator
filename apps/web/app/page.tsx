@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useEvents } from '@/hooks/use-events'
 import { POLISH_CITIES, EVENT_CATEGORIES } from '@events-agregator/shared'
 import { Header } from '@/components/header'
 import { EventCard } from '@/components/event-card'
+import { supabase } from '@/lib/supabase-client'
 
 export default function Home() {
   const [filters, setFilters] = useState({
@@ -18,6 +19,36 @@ export default function Home() {
     limit: 25,
     offset: 0
   })
+  
+  // Debug logging
+  console.log('Home page - Events query state:', { data, isLoading, error })
+  
+  // Test Supabase connection
+  useEffect(() => {
+    const testConnection = async () => {
+      try {
+        console.log('=== HOSTNAME DEBUG ===')
+        console.log('Current hostname:', window.location.hostname)
+        console.log('Current href:', window.location.href)
+        console.log('User agent:', navigator.userAgent)
+        console.log('======================')
+        
+        console.log('Testing direct Supabase connection...')
+        const { data, error } = await supabase
+          .from('events')
+          .select('count(*)', { count: 'exact', head: true })
+        console.log('Direct Supabase test result:', { data, error })
+        
+        console.log('Testing via API route...')
+        const apiResponse = await fetch('/api/test-db')
+        const apiData = await apiResponse.json()
+        console.log('API test result:', apiData)
+      } catch (err) {
+        console.error('Connection test error:', err)
+      }
+    }
+    testConnection()
+  }, [])
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -91,15 +122,15 @@ export default function Home() {
           <div className="text-center py-12">
             <p className="text-red-600">Błąd podczas ładowania wydarzeń</p>
           </div>
-        ) : data?.items?.length === 0 ? (
+        ) : !data || data.items?.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-600">Nie znaleziono wydarzeń</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {data?.items.map((event) => (
+            {data.items?.map((event: any) => (
               <EventCard key={event.id} event={event} />
-            ))}
+            )) || []}
           </div>
         )}
       </div>

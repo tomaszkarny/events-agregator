@@ -44,9 +44,9 @@ router.post('/register', authRateLimiter, async (req, res, next) => {
 
     res.status(201).json({
       user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
+        id: authData.user?.id,
+        email: authData.user?.email || email,
+        name: name || authData.user?.user_metadata?.name,
       },
       session: authData.session
     })

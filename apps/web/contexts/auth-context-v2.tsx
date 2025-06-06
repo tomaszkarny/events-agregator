@@ -36,9 +36,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Load user profile
   const loadProfile = async (userId: string) => {
     try {
+      // First ensure profile exists using safe RPC function
+      console.log('Ensuring profile exists for user:', userId)
+      const { error: ensureError } = await supabase
+        .rpc('ensure_profile_exists')
+      
+      if (ensureError) {
+        console.error('ensure_profile_exists error:', ensureError)
+      }
+      
+      // Now load the profile
       const profileData = await getProfile(userId)
       if (profileData) {
         setProfile(profileData)
+      } else {
+        console.log('Profile not found after ensure_profile_exists')
       }
     } catch (error) {
       console.error('Error loading profile:', error)
