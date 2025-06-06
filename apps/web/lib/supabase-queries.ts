@@ -393,11 +393,21 @@ export async function getChildProfiles(userId?: string) {
   const { data, error } = await supabase
     .from('child_profiles')
     .select('*')
-    .eq('parent_id', id)
+    .eq('user_id', id)
     .order('created_at', { ascending: false })
 
   if (error) throw error
-  return data || []
+  
+  // Transform snake_case to camelCase
+  return (data || []).map((profile: any) => ({
+    id: profile.id,
+    userId: profile.user_id,
+    name: profile.name,
+    age: profile.age,
+    interests: profile.interests || [],
+    createdAt: profile.created_at,
+    updatedAt: profile.updated_at
+  }))
 }
 
 export async function createChildProfile(childData: {
@@ -405,21 +415,103 @@ export async function createChildProfile(childData: {
   age: number
   interests?: string[]
 }) {
-  const { data: { user } } = await supabase.auth.getUser()
+  console.log('createChildProfile called with:', childData)
   
-  if (!user) throw new Error('Not authenticated')
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  
+  console.log('Auth check result:', { 
+    hasUser: !!user, 
+    userId: user?.id, 
+    userEmail: user?.email,
+    authError: authError 
+  })
+  
+  if (authError) {
+    console.error('Authentication error:', authError)
+    throw new Error(`Authentication failed: ${authError.message}`)
+  }
+  
+  if (!user) {
+    console.error('No authenticated user found')
+    throw new Error('Not authenticated')
+  }
+
+  // CRITICAL: Ensure user profile exists before creating child profile
+  console.log('Ensuring user profile exists...')
+  
+  // First, try the safe database function
+  const { error: ensureError } = await supabase
+    .rpc('ensure_profile_exists')
+  
+  if (ensureError) {
+    console.error('ensure_profile_exists failed:', ensureError)
+    // Continue anyway - profile might exist
+  }
+  
+  // Verify profile exists
+  const { data: existingProfile, error: profileCheckError } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .single()
+
+  if (profileCheckError && profileCheckError.code === 'PGRST116') {
+    console.error('Profile still does not exist after ensure_profile_exists')
+    throw new Error('Profile creation failed. Please try logging out and back in.')
+  } else if (profileCheckError) {
+    console.error('Profile check failed:', profileCheckError)
+    throw new Error(`Profile check failed: ${profileCheckError.message}`)
+  } else {
+    console.log('Profile verified:', existingProfile)
+  }
+
+  const insertData = {
+    name: childData.name,
+    age: childData.age,
+    interests: childData.interests || [],
+    user_id: user.id
+  }
+  
+  console.log('Inserting child profile data:', insertData)
+
+  // First test if table is accessible
+  console.log('Testing table access...')
+  const { data: testData, error: testError } = await supabase
+    .from('child_profiles')
+    .select('count(*)', { count: 'exact', head: true })
+  
+  console.log('Table access test:', { testData, testError })
 
   const { data, error } = await supabase
     .from('child_profiles')
-    .insert({
-      ...childData,
-      parent_id: user.id
-    })
+    .insert(insertData)
     .select()
     .single()
 
-  if (error) throw error
-  return data
+  console.log('Database insert result:', { data, error })
+
+  if (error) {
+    console.error('Database error details:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    })
+    throw error
+  }
+  
+  console.log('Child profile created successfully:', data)
+  
+  // Transform to camelCase
+  return {
+    id: data.id,
+    userId: data.user_id,
+    name: data.name,
+    age: data.age,
+    interests: data.interests || [],
+    createdAt: data.created_at,
+    updatedAt: data.updated_at
+  }
 }
 
 export async function updateChildProfile(id: string, updates: {
@@ -435,12 +527,22 @@ export async function updateChildProfile(id: string, updates: {
     .from('child_profiles')
     .update(updates)
     .eq('id', id)
-    .eq('parent_id', user.id)
+    .eq('user_id', user.id)
     .select()
     .single()
 
   if (error) throw error
-  return data
+  
+  // Transform to camelCase
+  return {
+    id: data.id,
+    userId: data.user_id,
+    name: data.name,
+    age: data.age,
+    interests: data.interests || [],
+    createdAt: data.created_at,
+    updatedAt: data.updated_at
+  }
 }
 
 export async function deleteChildProfile(id: string) {
@@ -452,7 +554,7 @@ export async function deleteChildProfile(id: string) {
     .from('child_profiles')
     .delete()
     .eq('id', id)
-    .eq('parent_id', user.id)
+    .eq('user_id', user.id)
 
   if (error) throw error
 }
