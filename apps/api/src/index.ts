@@ -62,6 +62,5 @@ app.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully')
-  await prisma.$disconnect()
   process.exit(0)
 })

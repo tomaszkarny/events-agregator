@@ -1,9 +1,47 @@
 import { createClient } from './supabase-client'
-import type { Database } from '../../../lib/supabase-types'
 
-type Event = Database['public']['Tables']['events']['Row']
-type EventInsert = Database['public']['Tables']['events']['Insert']
-type Profile = Database['public']['Tables']['profiles']['Row']
+// Define types locally for now
+interface Event {
+  id: string
+  title: string
+  description: string
+  location_name: string
+  address: string
+  city: string
+  lat?: number
+  lng?: number
+  age_min: number
+  age_max: number
+  price_type: 'FREE' | 'PAID' | 'DONATION'
+  price?: number
+  category: string
+  tags: string[]
+  image_urls?: string[]
+  organizer_id: string
+  organizer_name: string
+  start_date: string
+  end_date?: string
+  status: string
+  view_count: number
+  click_count: number
+  created_at: string
+  updated_at: string
+  source_url?: string
+  source_hash?: string
+  source_id?: string
+  source_name?: string
+  postal_code?: string
+}
+
+interface Profile {
+  id: string
+  email: string
+  name?: string
+  avatar_url?: string
+  role: string
+  subscription_tier?: string
+  last_login_at?: string
+}
 
 // Transform snake_case database fields to camelCase for components
 function transformEvent(event: any) {
@@ -82,10 +120,15 @@ export async function searchEvents(params: {
 
   const { data, error, count } = await query
 
-  if (error) throw error
+  if (error) {
+    console.error('Supabase query error:', error)
+    throw error
+  }
+
+  const transformedItems = (data || []).map(transformEvent)
 
   return {
-    items: (data || []).map(transformEvent),
+    items: transformedItems,
     total: count || 0,
     hasMore: (count || 0) > offset + limit
   }
@@ -113,24 +156,27 @@ export async function getEvent(id: string) {
   return transformEvent(data)
 }
 
-export async function createEvent(event: Omit<EventInsert, 'organizer_id'>) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) throw new Error('Not authenticated')
-
-  const { data, error } = await supabase
-    .from('events')
-    .insert({
-      ...event,
-      organizer_id: user.id,
-      status: 'DRAFT' // All user-created events start as drafts
+export async function createEvent(event: Partial<Event>) {
+  try {
+    const response = await fetch('/api/events', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(event),
     })
-    .select()
-    .single()
 
-  if (error) throw error
-  return transformEvent(data)
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || 'Failed to create event')
+    }
+
+    const data = await response.json()
+    return transformEvent(data)
+  } catch (error) {
+    console.error('Error creating event:', error)
+    throw error
+  }
 }
 
 export async function updateEvent(id: string, updates: Partial<Event>) {

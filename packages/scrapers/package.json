@@ -10,8 +10,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@events-agregator/database": "*",
     "@events-agregator/shared": "*",
+    "@supabase/supabase-js": "^2.39.3",
     "axios": "^1.7.9",
     "bullmq": "^5.35.3",
     "ioredis": "^5.4.2",

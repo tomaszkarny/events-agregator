@@ -3,20 +3,27 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { POLISH_CITIES, EVENT_CATEGORIES, AGE_GROUPS } from '@events-agregator/shared'
-import { api } from '@/lib/api'
+import { useCreateEvent } from '@/hooks/use-events'
 import { useAuth } from '@/contexts/auth-context-v2'
 import { Header } from '@/components/header'
 import { toast } from '@/lib/toast'
 
 export default function AddEvent() {
   const router = useRouter()
-  const { user, loading, getAccessToken } = useAuth()
+  const { user, loading } = useAuth()
+  const createEventMutation = useCreateEvent()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
+  // Debug
+  console.log('AddEvent render:', { user: user?.email, loading })
+
   // Redirect if not authenticated
   useEffect(() => {
+    console.log('Auth check:', { loading, user: user?.email })
     if (!loading && !user) {
+      console.log('Redirecting to home - not authenticated')
+      toast.error('Musisz być zalogowany aby dodać wydarzenie')
       router.push('/')
     }
   }, [user, loading, router])
@@ -54,36 +61,33 @@ export default function AddEvent() {
         ? new Date(`${formData.endDate}T${formData.endTime}`)
         : undefined
 
-      // Get real auth token
-      const token = await getAccessToken()
-      if (!token) {
-        toast.error('Musisz być zalogowany aby dodać wydarzenie')
-        router.push('/')
-        return
-      }
-
-      await api.createEvent(token, {
+      // Create event using Supabase mutation
+      await createEventMutation.mutateAsync({
         title: formData.title,
         description: formData.description,
-        ageMin: formData.ageMin,
-        ageMax: formData.ageMax,
-        priceType: formData.priceType,
+        age_min: formData.ageMin,
+        age_max: formData.ageMax,
+        price_type: formData.priceType,
         price: formData.priceType === 'PAID' ? formData.price : undefined,
-        locationName: formData.locationName,
+        location_name: formData.locationName,
         address: formData.address,
         city: formData.city,
         lat: formData.lat || 0,
         lng: formData.lng || 0,
-        startDate: startDateTime.toISOString(),
-        endDate: endDateTime?.toISOString(),
+        start_date: startDateTime.toISOString(),
+        end_date: endDateTime?.toISOString(),
         category: formData.category,
-        imageUrls: formData.imageUrl ? [formData.imageUrl] : [],
+        image_urls: formData.imageUrl ? [formData.imageUrl] : [],
         tags: formData.tags.split(',').map(tag => tag.trim()).filter(Boolean),
+        currency: 'PLN',
+        organizer_name: user?.user_metadata?.name || user?.email || 'Organizator',
+        source_url: window.location.href,
+        status: 'DRAFT'
       })
 
-      // Success - redirect to home
+      // Success - redirect to my events
       toast.success('Wydarzenie zostało dodane! Czeka na moderację.')
-      router.push('/')
+      router.push('/my-events')
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Wystąpił błąd'
       setError(message)
@@ -105,9 +109,37 @@ export default function AddEvent() {
     )
   }
 
+  // Show loading state while checking auth
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center justify-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+              <span className="ml-3 text-gray-600">Ładowanie...</span>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
   // Don't render if user is not authenticated (will redirect)
   if (!user) {
-    return null
+    return (
+      <main className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-center py-12">
+              <p className="text-gray-600">Przekierowywanie...</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    )
   }
 
   return (

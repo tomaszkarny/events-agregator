@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
-import { prisma } from '@events-agregator/database'
 import { z } from 'zod'
 
 // FIX: Add input validation schema
@@ -110,7 +109,12 @@ export async function POST(req: NextRequest) {
     
     // FIX: Check database connection
     try {
-      await prisma.$queryRaw`SELECT 1`
+      const { error: testError } = await supabase
+        .from('profiles')
+        .select('id')
+        .limit(1)
+      
+      if (testError) throw testError
     } catch (dbConnectionError) {
       console.error('Database connection failed:', dbConnectionError)
       return NextResponse.json(
@@ -120,27 +124,45 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      // FIX: Add timeout to database operation
-      const dbOperationPromise = prisma.user.upsert({
-        where: { id: user.id },
-        update: {
-          email: user.email,
-          name: name || user.user_metadata?.name || user.email.split('@')[0] || 'User',
-          updatedAt: new Date(), // FIX: Explicitly update timestamp
-        },
-        create: {
-          id: user.id,
-          email: user.email,
-          name: name || user.user_metadata?.name || user.email.split('@')[0] || 'User',
-        }
-      })
-
-      // FIX: Add 10 second timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Database operation timeout')), 10000)
-      })
-
-      const dbUser = await Promise.race([dbOperationPromise, timeoutPromise]) as any
+      // Check if profile exists
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      
+      let dbUser
+      const profileData = {
+        email: user.email,
+        name: name || user.user_metadata?.name || user.email.split('@')[0] || 'User',
+        last_login_at: new Date().toISOString()
+      }
+      
+      if (existingProfile) {
+        // Update existing profile
+        const { data, error } = await supabase
+          .from('profiles')
+          .update(profileData)
+          .eq('id', user.id)
+          .select()
+          .single()
+        
+        if (error) throw error
+        dbUser = data
+      } else {
+        // Create new profile
+        const { data, error } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.id,
+            ...profileData
+          })
+          .select()
+          .single()
+        
+        if (error) throw error
+        dbUser = data
+      }
       
       console.log('User synced with database:', dbUser.id)
       

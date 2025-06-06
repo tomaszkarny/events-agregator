@@ -1,7 +1,7 @@
 import Parser from 'rss-parser'
 import { addDays, parseISO } from 'date-fns'
 import { BaseScraper, ScrapedEvent } from './base-scraper'
-import { PriceType } from '@prisma/client'
+import { PriceType } from './base-scraper'
 import { logger } from '../utils/logger'
 
 export class RssScraper extends BaseScraper {

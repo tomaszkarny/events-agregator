@@ -3,7 +3,7 @@ import * as cheerio from 'cheerio'
 import { addDays, parse } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { BaseScraper, ScrapedEvent } from './base-scraper'
-import { PriceType } from '@prisma/client'
+import { PriceType } from './base-scraper'
 import { logger } from '../utils/logger'
 
 export class BibliotekiWarszawaScraper extends BaseScraper {

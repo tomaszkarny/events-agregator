@@ -40,14 +40,7 @@ router.post('/register', authRateLimiter, async (req, res, next) => {
       throw new AppError(authError.message, 400)
     }
 
-    // Create database user
-    const user = await prisma.user.create({
-      data: {
-        id: authData.user!.id,
-        email,
-        name,
-      }
-    })
+    // Profile is created automatically by database trigger
 
     res.status(201).json({
       user: {
@@ -85,10 +78,10 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
     }
 
     // Update last login
-    await prisma.user.update({
-      where: { id: data.user.id },
-      data: { lastLoginAt: new Date() }
-    })
+    await supabase
+      .from('profiles')
+      .update({ last_login_at: new Date() })
+      .eq('id', data.user.id)
 
     res.json({
       user: {
@@ -108,15 +101,17 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
 // GET /api/auth/profile
 router.get('/profile', authenticate, async (req: AuthRequest, res, next) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user!.id },
-      include: {
-        childProfiles: true,
-        subscription: true,
-      }
-    })
+    const { data: user, error } = await supabase
+      .from('profiles')
+      .select(`
+        *,
+        child_profiles(*),
+        subscriptions(*)
+      `)
+      .eq('id', req.user!.id)
+      .single()
 
-    if (!user) {
+    if (error || !user) {
       throw new AppError('User not found', 404)
     }
 

@@ -10,7 +10,6 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@events-agregator/database": "*",
     "@events-agregator/shared": "*",
     "@supabase/supabase-js": "^2.48.0",
     "cors": "^2.8.5",

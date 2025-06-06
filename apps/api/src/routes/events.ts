@@ -4,6 +4,15 @@ import { createClient } from '@supabase/supabase-js'
 import { AppError } from '../middleware/errorHandler'
 import { authenticate, AuthRequest } from '../middleware/auth'
 import { logger } from '../utils/logger'
+import dotenv from 'dotenv'
+
+dotenv.config()
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY! // Use service role for server-side operations
+)
 
 const router = Router()
 
@@ -28,63 +37,55 @@ router.get('/', async (req, res, next) => {
   try {
     const query = searchEventsSchema.parse(req.query)
     
-    const where: any = {
-      status: { in: ['ACTIVE', 'DRAFT'] }, // Show both active and draft events
-    }
+    // Query parameters will be handled in Supabase query builder
 
-    if (query.city) where.city = query.city
-    if (query.category) where.category = query.category
-    if (query.priceType) where.priceType = query.priceType
+    // Build Supabase query
+    let supabaseQuery = supabase
+      .from('events')
+      .select('*')
+      .in('status', ['ACTIVE', 'DRAFT'])
     
-    if (query.ageMin || query.ageMax) {
-      where.AND = []
-      if (query.ageMin) where.AND.push({ ageMax: { gte: query.ageMin } })
-      if (query.ageMax) where.AND.push({ ageMin: { lte: query.ageMax } })
+    if (query.city) {
+      supabaseQuery = supabaseQuery.eq('city', query.city)
     }
-
-    if (query.startDate) {
-      where.startDate = { gte: new Date(query.startDate) }
+    
+    if (query.category) {
+      supabaseQuery = supabaseQuery.eq('category', query.category)
     }
-
+    
+    if (query.priceType) {
+      supabaseQuery = supabaseQuery.eq('price_type', query.priceType)
+    }
+    
+    if (query.ageMin) {
+      supabaseQuery = supabaseQuery.gte('age_max', query.ageMin)
+    }
+    
+    if (query.ageMax) {
+      supabaseQuery = supabaseQuery.lte('age_min', query.ageMax)
+    }
+    
     if (query.search) {
-      where.OR = [
-        { title: { contains: query.search, mode: 'insensitive' } },
-        { description: { contains: query.search, mode: 'insensitive' } },
-      ]
+      supabaseQuery = supabaseQuery.or(`title.ilike.%${query.search}%,description.ilike.%${query.search}%`)
     }
+    
+    if (query.startDate) {
+      supabaseQuery = supabaseQuery.gte('start_date', query.startDate)
+    }
+    
+    // Add pagination
+    const offset = query.cursor ? 1 : 0 // Skip cursor if provided
+    supabaseQuery = supabaseQuery
+      .order('start_date', { ascending: true })
+      .range(offset, offset + query.limit)
+    
+    const { data: events, error } = await supabaseQuery
+    
+    if (error) throw error
 
-    const events = await prisma.event.findMany({
-      where,
-      take: query.limit + 1,
-      cursor: query.cursor ? { id: query.cursor } : undefined,
-      orderBy: { startDate: 'asc' },
-      select: {
-        id: true,
-        title: true,
-        description: true,
-        ageMin: true,
-        ageMax: true,
-        priceType: true,
-        price: true,
-        currency: true,
-        locationName: true,
-        address: true,
-        city: true,
-        lat: true,
-        lng: true,
-        startDate: true,
-        endDate: true,
-        category: true,
-        imageUrls: true,
-        tags: true,
-        organizerName: true,
-        status: true, // Add status to see DRAFT/ACTIVE
-      }
-    })
-
-    const hasMore = events.length > query.limit
-    const items = hasMore ? events.slice(0, -1) : events
-    const nextCursor = hasMore ? items[items.length - 1].id : null
+    const hasMore = events && events.length > query.limit
+    const items = hasMore ? events.slice(0, -1) : events || []
+    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1].id : null
 
     res.json({
       items,
@@ -99,28 +100,28 @@ router.get('/', async (req, res, next) => {
 // GET /api/events/:id - Get single event
 router.get('/:id', async (req, res, next) => {
   try {
-    const event = await prisma.event.findUnique({
-      where: { id: req.params.id },
-      include: {
-        organizer: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
-        }
-      }
-    })
+    const { data: event, error } = await supabase
+      .from('events')
+      .select(`
+        *,
+        organizer:profiles!events_organizer_id_fkey(
+          id,
+          name,
+          email
+        )
+      `)
+      .eq('id', req.params.id)
+      .single()
 
-    if (!event) {
+    if (error || !event) {
       throw new AppError('Event not found', 404)
     }
 
     // Increment view count
-    await prisma.event.update({
-      where: { id: req.params.id },
-      data: { viewCount: { increment: 1 } }
-    })
+    await supabase
+      .from('events')
+      .update({ view_count: (event.view_count || 0) + 1 })
+      .eq('id', req.params.id)
 
     res.json(event)
   } catch (error) {
@@ -153,15 +154,38 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
 
     const data = createEventSchema.parse(req.body)
 
-    const event = await prisma.event.create({
-      data: {
-        ...data,
-        organizerId: req.user!.id,
-        organizerName: req.user!.name || req.user!.email,
-        sourceUrl: `${process.env.NEXT_PUBLIC_APP_URL}/events/user-submitted`,
-        status: 'DRAFT', // Requires moderation
-      }
-    })
+    // Transform camelCase to snake_case for database
+    const dbData = {
+      title: data.title,
+      description: data.description,
+      age_min: data.ageMin,
+      age_max: data.ageMax,
+      price_type: data.priceType,
+      price: data.price,
+      currency: data.currency,
+      location_name: data.locationName,
+      address: data.address,
+      city: data.city,
+      lat: data.lat,
+      lng: data.lng,
+      start_date: data.startDate,
+      end_date: data.endDate,
+      category: data.category,
+      image_urls: data.imageUrls,
+      tags: data.tags,
+      organizer_id: req.user!.id,
+      organizer_name: req.user!.name || req.user!.email,
+      source_url: `${process.env.NEXT_PUBLIC_APP_URL}/events/user-submitted`,
+      status: 'DRAFT', // Requires moderation
+    }
+
+    const { data: event, error } = await supabase
+      .from('events')
+      .insert(dbData)
+      .select()
+      .single()
+    
+    if (error) throw error
 
     logger.info(`New event created: ${event.id} by temp user`)
 
@@ -177,10 +201,18 @@ router.post('/', authenticate, async (req: AuthRequest, res, next) => {
 // POST /api/events/:id/click - Track click
 router.post('/:id/click', async (req, res, next) => {
   try {
-    await prisma.event.update({
-      where: { id: req.params.id },
-      data: { clickCount: { increment: 1 } }
-    })
+    // Get current click count
+    const { data: event } = await supabase
+      .from('events')
+      .select('click_count')
+      .eq('id', req.params.id)
+      .single()
+    
+    // Update with incremented value
+    await supabase
+      .from('events')
+      .update({ click_count: (event?.click_count || 0) + 1 })
+      .eq('id', req.params.id)
 
     res.json({ success: true })
   } catch (error) {

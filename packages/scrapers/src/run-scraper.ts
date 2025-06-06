@@ -1,7 +1,6 @@
 import dotenv from 'dotenv'
 import { ScraperManager } from './scrapers/scraper-manager'
 import { logger } from './utils/logger'
-import { prisma } from '@events-agregator/database'
 
 dotenv.config()
 
@@ -37,8 +36,6 @@ async function main() {
   } catch (error) {
     logger.error('Scraper execution failed', { error })
     process.exit(1)
-  } finally {
-    await prisma.$disconnect()
   }
 }
 

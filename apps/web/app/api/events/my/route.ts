@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
-import { prisma } from '@events-agregator/database'
 
 export async function GET(req: NextRequest) {
   try {
@@ -26,27 +25,48 @@ export async function GET(req: NextRequest) {
     console.log('✅ User authenticated:', user.email)
     
     // Get user's events from database
-    const events = await prisma.event.findMany({
-      where: {
-        organizerId: user.id
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    })
+    const { data: events, error: eventsError } = await supabase
+      .from('events')
+      .select('*')
+      .eq('organizer_id', user.id)
+      .order('created_at', { ascending: false })
     
-    // Calculate stats
-    const stats = {
-      total: events.length,
-      draft: events.filter(e => e.status === 'DRAFT').length,
-      active: events.filter(e => e.status === 'ACTIVE').length,
-      expired: events.filter(e => e.status === 'EXPIRED').length,
-      totalViews: events.reduce((sum, e) => sum + e.viewCount, 0),
-      totalClicks: events.reduce((sum, e) => sum + e.clickCount, 0),
+    if (eventsError) {
+      console.error('Error fetching events:', eventsError)
+      throw eventsError
     }
     
+    // Calculate stats
+    const safeEvents = events || []
+    const stats = {
+      total: safeEvents.length,
+      draft: safeEvents.filter(e => e.status === 'DRAFT').length,
+      active: safeEvents.filter(e => e.status === 'ACTIVE').length,
+      expired: safeEvents.filter(e => e.status === 'EXPIRED').length,
+      totalViews: safeEvents.reduce((sum, e) => sum + (e.view_count || 0), 0),
+      totalClicks: safeEvents.reduce((sum, e) => sum + (e.click_count || 0), 0),
+    }
+    
+    // Transform snake_case to camelCase for frontend compatibility
+    const transformedEvents = safeEvents.map(event => ({
+      ...event,
+      organizerId: event.organizer_id,
+      organizerName: event.organizer_name,
+      locationName: event.location_name,
+      startDate: event.start_date,
+      endDate: event.end_date,
+      ageMin: event.age_min,
+      ageMax: event.age_max,
+      priceType: event.price_type,
+      imageUrls: event.image_urls || [],
+      viewCount: event.view_count,
+      clickCount: event.click_count,
+      createdAt: event.created_at,
+      updatedAt: event.updated_at
+    }))
+    
     return NextResponse.json({ 
-      events,
+      events: transformedEvents,
       stats,
       user: {
         id: user.id,

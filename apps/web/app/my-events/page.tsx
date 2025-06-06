@@ -2,17 +2,20 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/auth-context-v2'
 import { Header } from '@/components/header'
 import { EventCard } from '@/components/event-card'
 import { api } from '@/lib/api'
 import { toast } from '@/lib/toast'
+import { createClient } from '@/lib/supabase'
 
 export default function MyEvents() {
   const router = useRouter()
   const { user, loading: authLoading, getAccessToken } = useAuth()
   const [activeTab, setActiveTab] = useState<'all' | 'draft' | 'active'>('all')
+  const queryClient = useQueryClient()
+  const supabase = createClient()
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -187,14 +190,38 @@ export default function MyEvents() {
                 {/* Action buttons overlay */}
                 <div className="absolute top-4 right-4 flex gap-2">
                   <button
-                    onClick={() => toast.info('Edycja wydarzeń będzie dostępna wkrótce')}
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      router.push(`/events/${event.id}/edit`)
+                    }}
                     className="bg-white bg-opacity-90 p-2 rounded-full shadow hover:bg-opacity-100"
                     title="Edytuj"
                   >
                     ✏️
                   </button>
                   <button
-                    onClick={() => toast.info('Usuwanie wydarzeń będzie dostępne wkrótce')}
+                    onClick={async (e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      
+                      if (confirm('Czy na pewno chcesz usunąć to wydarzenie?')) {
+                        try {
+                          const { error } = await supabase
+                            .from('events')
+                            .update({ status: 'ARCHIVED' })
+                            .eq('id', event.id)
+                          
+                          if (error) throw error
+                          
+                          toast.success('Wydarzenie zostało usunięte')
+                          queryClient.invalidateQueries({ queryKey: ['my-events'] })
+                        } catch (error) {
+                          console.error('Error deleting event:', error)
+                          toast.error('Błąd podczas usuwania wydarzenia')
+                        }
+                      }
+                    }}
                     className="bg-white bg-opacity-90 p-2 rounded-full shadow hover:bg-opacity-100"
                     title="Usuń"
                   >

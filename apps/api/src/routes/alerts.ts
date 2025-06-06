@@ -3,6 +3,15 @@ import { z } from 'zod'
 import { createClient } from '@supabase/supabase-js'
 import { AppError } from '../middleware/errorHandler'
 import { authenticate, AuthRequest } from '../middleware/auth'
+import dotenv from 'dotenv'
+
+dotenv.config()
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 const router = Router()
 
@@ -12,12 +21,14 @@ router.use(authenticate)
 // GET /api/alerts - Get user's alerts
 router.get('/', async (req: AuthRequest, res, next) => {
   try {
-    const alerts = await prisma.alert.findMany({
-      where: { userId: req.user!.id },
-      orderBy: { createdAt: 'desc' }
-    })
+    const { data: alerts, error } = await supabase
+      .from('alerts')
+      .select('*')
+      .eq('user_id', req.user!.id)
+      .order('created_at', { ascending: false })
 
-    res.json(alerts)
+    if (error) throw error
+    res.json(alerts || [])
   } catch (error) {
     next(error)
   }
@@ -43,30 +54,40 @@ router.post('/', async (req: AuthRequest, res, next) => {
     const data = createAlertSchema.parse(req.body)
 
     // Check if user has PRO subscription for immediate alerts
-    const user = await prisma.user.findUnique({
-      where: { id: req.user!.id },
-      select: { subscriptionTier: true }
-    })
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('subscription_tier')
+      .eq('id', req.user!.id)
+      .single()
 
-    if (data.frequency === 'IMMEDIATE' && user?.subscriptionTier !== 'PRO') {
+    if (data.frequency === 'IMMEDIATE' && profile?.subscription_tier !== 'PRO') {
       throw new AppError('Immediate alerts require PRO subscription', 403)
     }
 
     // Check alert limit (max 10 per user)
-    const alertCount = await prisma.alert.count({
-      where: { userId: req.user!.id }
-    })
+    const { count } = await supabase
+      .from('alerts')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', req.user!.id)
 
-    if (alertCount >= 10) {
+    if ((count || 0) >= 10) {
       throw new AppError('Alert limit reached (max 10)', 400)
     }
 
-    const alert = await prisma.alert.create({
-      data: {
-        ...data,
-        userId: req.user!.id,
-      }
-    })
+    const { data: alert, error } = await supabase
+      .from('alerts')
+      .insert({
+        name: data.name,
+        filters: data.filters,
+        frequency: data.frequency,
+        channels: data.channels,
+        user_id: req.user!.id,
+        is_active: true
+      })
+      .select()
+      .single()
+    
+    if (error) throw error
 
     res.status(201).json(alert)
   } catch (error) {
@@ -97,22 +118,32 @@ router.patch('/:id', async (req: AuthRequest, res, next) => {
 
     const data = updateAlertSchema.parse(req.body)
 
-    // Check ownership
-    const alert = await prisma.alert.findFirst({
-      where: {
-        id: req.params.id,
-        userId: req.user!.id
-      }
-    })
+    // Check ownership and update
+    const { data: alert } = await supabase
+      .from('alerts')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user!.id)
+      .single()
 
     if (!alert) {
       throw new AppError('Alert not found', 404)
     }
 
-    const updated = await prisma.alert.update({
-      where: { id: req.params.id },
-      data
-    })
+    const { data: updated, error } = await supabase
+      .from('alerts')
+      .update({
+        name: data.name || alert.name,
+        filters: data.filters || alert.filters,
+        frequency: data.frequency || alert.frequency,
+        channels: data.channels || alert.channels,
+        is_active: data.isActive !== undefined ? data.isActive : alert.is_active
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single()
+    
+    if (error) throw error
 
     res.json(updated)
   } catch (error) {
@@ -126,20 +157,23 @@ router.patch('/:id', async (req: AuthRequest, res, next) => {
 // DELETE /api/alerts/:id - Delete alert
 router.delete('/:id', async (req: AuthRequest, res, next) => {
   try {
-    const alert = await prisma.alert.findFirst({
-      where: {
-        id: req.params.id,
-        userId: req.user!.id
-      }
-    })
+    const { data: alert } = await supabase
+      .from('alerts')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user!.id)
+      .single()
 
     if (!alert) {
       throw new AppError('Alert not found', 404)
     }
 
-    await prisma.alert.delete({
-      where: { id: req.params.id }
-    })
+    const { error } = await supabase
+      .from('alerts')
+      .delete()
+      .eq('id', req.params.id)
+    
+    if (error) throw error
 
     res.json({ success: true })
   } catch (error) {
