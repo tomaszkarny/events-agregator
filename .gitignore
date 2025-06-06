@@ -47,3 +47,14 @@ next-env.d.ts
 # OS
 .DS_Store
 Thumbs.db
+
+# Documentation files (local only)
+PRD.md
+IMPLEMENTATION_STATUS.md
+IMPLEMENTATION_GUIDE.md
+CLAUDE.md
+
+# Test and debug files
+apps/web/app/api/test*/
+apps/web/app/debug*/
+apps/web/app/test/
