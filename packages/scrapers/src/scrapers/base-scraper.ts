@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import crypto from 'crypto'
+import dotenv from 'dotenv'
+import path from 'path'
 import { logger } from '../utils/logger'
+
+// Load environment variables
+dotenv.config({ path: path.join(__dirname, '..', '..', '.env') })
 
 // Initialize Supabase client for scrapers
 const supabase = createClient(

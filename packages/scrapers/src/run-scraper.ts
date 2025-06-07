@@ -1,8 +1,10 @@
 import dotenv from 'dotenv'
+import path from 'path'
 import { ScraperManager } from './scrapers/scraper-manager'
 import { logger } from './utils/logger'
 
-dotenv.config()
+// Load environment variables from the scrapers package .env file
+dotenv.config({ path: path.join(__dirname, '..', '.env') })
 
 async function main() {
   const scraperName = process.argv[2]

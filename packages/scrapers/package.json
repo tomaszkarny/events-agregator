@@ -7,6 +7,8 @@
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "scrape": "tsx src/run-scraper.ts",
+    "queue:start": "tsx src/queue-worker.ts",
+    "queue:dev": "tsx watch src/queue-worker.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

@@ -96,11 +96,24 @@ export default function MyEvents() {
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Moje wydarzenia</h1>
-          <p className="mt-2 text-gray-600">
-            Zarządzaj wydarzeniami które dodałeś
-          </p>
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Moje wydarzenia</h1>
+            <p className="mt-2 text-gray-600">
+              Zarządzaj wydarzeniami które dodałeś
+            </p>
+          </div>
+          <div className="mt-4 sm:mt-0">
+            <a
+              href="/add-event"
+              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <svg className="mr-2 h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+              Dodaj wydarzenie
+            </a>
+          </div>
         </div>
 
         {/* Stats Cards */}

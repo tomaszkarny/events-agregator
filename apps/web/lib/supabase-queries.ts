@@ -206,6 +206,8 @@ export async function getEvent(id: string) {
 
 export async function createEvent(event: Partial<Event>) {
   try {
+    // Event data is already in snake_case format from the form
+    // API endpoint expects snake_case for database insertion
     const response = await fetch('/api/events', {
       method: 'POST',
       headers: {

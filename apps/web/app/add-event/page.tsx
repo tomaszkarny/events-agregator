@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { POLISH_CITIES, EVENT_CATEGORIES, AGE_GROUPS } from '@events-agregator/shared'
+import { POLISH_CITIES, EVENT_CATEGORIES, AGE_GROUPS, CITY_COORDINATES } from '@events-agregator/shared'
 import { useCreateEvent } from '@/hooks/use-events'
 import { useAuth } from '@/contexts/auth-context-v2'
 import { Header } from '@/components/header'
+import { GoogleStyleAddressInput } from '@/components/google-style-address-input'
 import { toast } from '@/lib/toast'
 
 export default function AddEvent() {
@@ -15,14 +16,9 @@ export default function AddEvent() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
 
-  // Debug
-  console.log('AddEvent render:', { user: user?.email, loading })
-
   // Redirect if not authenticated
   useEffect(() => {
-    console.log('Auth check:', { loading, user: user?.email })
     if (!loading && !user) {
-      console.log('Redirecting to home - not authenticated')
       toast.error('Musisz być zalogowany aby dodać wydarzenie')
       router.push('/')
     }
@@ -38,8 +34,8 @@ export default function AddEvent() {
     locationName: '',
     address: '',
     city: 'Warszawa',
-    lat: 0,
-    lng: 0,
+    lat: CITY_COORDINATES['Warszawa'].lat,
+    lng: CITY_COORDINATES['Warszawa'].lng,
     startDate: '',
     startTime: '',
     endDate: '',
@@ -48,6 +44,23 @@ export default function AddEvent() {
     imageUrl: '',
     tags: '',
   })
+
+  const handleAddressComplete = (addressData: {
+    locationName: string
+    address: string
+    city: string
+    lat: number
+    lng: number
+  }) => {
+    setFormData(prev => ({
+      ...prev,
+      locationName: addressData.locationName,
+      address: addressData.address,
+      city: addressData.city,
+      lat: addressData.lat,
+      lng: addressData.lng
+    }))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -98,18 +111,6 @@ export default function AddEvent() {
   }
 
   // Show loading while checking auth
-  if (loading) {
-    return (
-      <main className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-          <p>Ładowanie...</p>
-        </div>
-      </main>
-    )
-  }
-
-  // Show loading state while checking auth
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-50">
@@ -292,7 +293,16 @@ export default function AddEvent() {
               <select
                 required
                 value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                onChange={(e) => {
+                  const selectedCity = e.target.value
+                  const coords = CITY_COORDINATES[selectedCity] || { lat: 52.23, lng: 21.01 }
+                  setFormData({ 
+                    ...formData, 
+                    city: selectedCity,
+                    lat: coords.lat,
+                    lng: coords.lng
+                  })
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {POLISH_CITIES.map((city) => (
@@ -321,15 +331,18 @@ export default function AddEvent() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Adres *
               </label>
-              <input
-                type="text"
-                required
+              <GoogleStyleAddressInput
                 value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="np. ul. Łowicka 21"
+                onChange={(value) => setFormData({ ...formData, address: value })}
+                onAddressComplete={handleAddressComplete}
+                placeholder="🔍 np. Pałac Kultury lub ul. Marszałkowska 10, Warszawa"
+                required
               />
             </div>
+
+            {/* Hidden coordinates - automatically set based on city */}
+            <input type="hidden" name="lat" value={formData.lat} />
+            <input type="hidden" name="lng" value={formData.lng} />
 
             {/* Data i godzina */}
             <div className="grid grid-cols-2 gap-4">

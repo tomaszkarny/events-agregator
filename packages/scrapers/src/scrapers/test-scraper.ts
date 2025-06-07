@@ -1,5 +1,5 @@
 import { addDays, addHours } from 'date-fns'
-import { BaseScraper, ScrapedEvent, PriceType, EventCategory } from './base-scraper'
+import { BaseScraper, ScrapedEvent } from './base-scraper'
 import { logger } from '../utils/logger'
 
 /**
@@ -22,7 +22,7 @@ export class TestScraper extends BaseScraper {
         description: 'Testowe wydarzenie wygenerowane przez scraper. Warsztaty robotyki dla dzieci z wykorzystaniem klocków LEGO.',
         ageMin: 7,
         ageMax: 12,
-        priceType: PriceType.PAID,
+        priceType: 'PAID',
         price: 50,
         locationName: 'Centrum Testowe',
         address: 'ul. Testowa 123',
@@ -34,7 +34,7 @@ export class TestScraper extends BaseScraper {
         imageUrls: ['https://picsum.photos/800/600?random=1'],
         startDate: addDays(new Date(), 3),
         endDate: addHours(addDays(new Date(), 3), 2),
-        category: EventCategory.EDUKACJA,
+        category: 'EDUKACJA',
         tags: ['test', 'robotyka', 'LEGO']
       },
       {
@@ -42,7 +42,7 @@ export class TestScraper extends BaseScraper {
         description: 'Testowy spektakl teatralny dla najmłodszych widzów.',
         ageMin: 3,
         ageMax: 6,
-        priceType: PriceType.FREE,
+        priceType: 'FREE',
         locationName: 'Teatr Testowy',
         address: 'ul. Sceniczna 456',
         city: 'Kraków',
@@ -53,7 +53,7 @@ export class TestScraper extends BaseScraper {
         imageUrls: ['https://picsum.photos/800/600?random=2'],
         startDate: addDays(new Date(), 5),
         endDate: addHours(addDays(new Date(), 5), 1.5),
-        category: EventCategory.SPEKTAKLE,
+        category: 'SPEKTAKLE',
         tags: ['test', 'teatr', 'bajka']
       }
     ]

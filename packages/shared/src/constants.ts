@@ -2,6 +2,8 @@ export const SUBSCRIPTION_PRICE_PLN = 9
 export const COMMISSION_PERCENTAGE = 8
 export const FREE_TRIAL_DAYS = 7
 
+export { CITY_COORDINATES } from './constants/cities'
+
 export const POLISH_CITIES = [
   'Warszawa',
   'Kraków',

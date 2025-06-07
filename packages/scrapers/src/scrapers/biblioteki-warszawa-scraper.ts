@@ -3,7 +3,6 @@ import * as cheerio from 'cheerio'
 import { addDays, parse } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { BaseScraper, ScrapedEvent } from './base-scraper'
-import { PriceType } from './base-scraper'
 import { logger } from '../utils/logger'
 
 export class BibliotekiWarszawaScraper extends BaseScraper {
@@ -43,7 +42,7 @@ export class BibliotekiWarszawaScraper extends BaseScraper {
             description: this.normalizeText(description || 'Zapraszamy na wydarzenie w bibliotece'),
             ageMin: ageRange.min,
             ageMax: ageRange.max,
-            priceType: PriceType.FREE, // Library events are usually free
+            priceType: 'FREE', // Library events are usually free
             locationName: location || 'Biblioteka Publiczna',
             address: 'Do potwierdzenia',
             city: 'Warszawa',

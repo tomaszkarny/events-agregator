@@ -1,7 +1,6 @@
 import Parser from 'rss-parser'
 import { addDays, parseISO } from 'date-fns'
 import { BaseScraper, ScrapedEvent } from './base-scraper'
-import { PriceType, EventCategory } from './base-scraper'
 import { logger } from '../utils/logger'
 
 /**
@@ -102,24 +101,24 @@ export class CzasDzieciScraper extends BaseScraper {
     return 'Warszawa' // Default
   }
   
-  private extractPrice(text: string): { type: PriceType, amount?: number } {
+  private extractPrice(text: string): { type: 'FREE' | 'PAID' | 'DONATION', amount?: number } {
     const lowerText = text.toLowerCase()
     
     if (lowerText.includes('bezpłat') || lowerText.includes('wstęp wolny') || 
         lowerText.includes('darmow') || lowerText.includes('free')) {
-      return { type: PriceType.FREE }
+      return { type: 'FREE' }
     }
     
     // Szukaj kwot
     const priceMatch = text.match(/(\d+)\s*(zł|PLN|złot)/i)
     if (priceMatch) {
       return { 
-        type: PriceType.PAID, 
+        type: 'PAID', 
         amount: parseInt(priceMatch[1]) 
       }
     }
     
-    return { type: PriceType.PAID, amount: 20 } // Default
+    return { type: 'PAID', amount: 20 } // Default
   }
   
   private extractLocation(text: string): string | null {
@@ -163,23 +162,23 @@ export class CzasDzieciScraper extends BaseScraper {
     return images.slice(0, 3)
   }
   
-  private mapCategoryFromTags(tags: string[]): EventCategory {
+  private mapCategoryFromTags(tags: string[]): 'WARSZTATY' | 'SPEKTAKLE' | 'SPORT' | 'EDUKACJA' | 'INNE' {
     const tagString = tags.join(' ').toLowerCase()
     
     if (tagString.includes('warsztat') || tagString.includes('zajęcia')) {
-      return EventCategory.WARSZTATY
+      return 'WARSZTATY'
     }
     if (tagString.includes('spektakl') || tagString.includes('teatr')) {
-      return EventCategory.SPEKTAKLE
+      return 'SPEKTAKLE'
     }
     if (tagString.includes('sport') || tagString.includes('basen')) {
-      return EventCategory.SPORT
+      return 'SPORT'
     }
     if (tagString.includes('nauk') || tagString.includes('eduk')) {
-      return EventCategory.EDUKACJA
+      return 'EDUKACJA'
     }
     
-    return EventCategory.INNE
+    return 'INNE'
   }
   
   private parseDate(dateStr: string | undefined): Date | null {

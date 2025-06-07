@@ -15,10 +15,10 @@ export class ScraperManager {
   private registerScrapers() {
     // Register all available scrapers
     const scrapers = [
-      // new RssScraper(), // przykładowy
-      // new BibliotekiWarszawaScraper(), // przykładowy
-      // new CzasDzieciScraper(), // RSS nie działa
-      new TestScraper(), // Testowy scraper do sprawdzenia czy system działa
+      new RssScraper(), // Generic RSS scraper
+      new BibliotekiWarszawaScraper(), // Warsaw libraries
+      new CzasDzieciScraper(), // CzasDzieci.pl RSS feed
+      new TestScraper(), // Test scraper for system verification
     ]
     
     for (const scraper of scrapers) {

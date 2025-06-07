@@ -71,6 +71,25 @@ class ApiClient {
     })
   }
 
+  async updateEvent(token: string, id: string, data: Partial<EventApiResponse>) {
+    return this.request<EventApiResponse>(`/events/${id}`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteEvent(token: string, id: string) {
+    return this.request(`/events/${id}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+  }
+
   // Auth
   async login(email: string, password: string) {
     return this.request<{

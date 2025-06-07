@@ -5,24 +5,13 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useAuth } from '@/contexts/auth-context-v2'
 import { toast } from '@/lib/toast'
-
-const CITIES = [
-  'Warszawa', 'Kraków', 'Łódź', 'Wrocław', 'Poznań',
-  'Gdańsk', 'Szczecin', 'Bydgoszcz', 'Lublin', 'Białystok',
-  'Katowice', 'Gdynia', 'Częstochowa', 'Radom', 'Sosnowiec'
-]
-
-const CATEGORIES = [
-  { value: 'WARSZTATY', label: 'Warsztaty' },
-  { value: 'SPEKTAKLE', label: 'Spektakle' },
-  { value: 'SPORT', label: 'Sport i rekreacja' },
-  { value: 'EDUKACJA', label: 'Edukacja' },
-  { value: 'INNE', label: 'Inne' }
-]
+import { api } from '@/lib/api'
+import { GoogleStyleAddressInput } from '@/components/google-style-address-input'
+import { CITY_COORDINATES, POLISH_CITIES, EVENT_CATEGORIES } from '@events-agregator/shared'
 
 export default function EditEventPage({ params }: { params: { id: string } }) {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, session } = useAuth()
   const supabase = createClient()
   
   const [loading, setLoading] = useState(true)
@@ -42,7 +31,9 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
     startDate: '',
     endDate: '',
     tags: [] as string[],
-    imageUrl: ''
+    imageUrl: '',
+    latitude: 0,
+    longitude: 0
   })
 
   useEffect(() => {
@@ -89,7 +80,9 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
         startDate: new Date(data.start_date).toISOString().slice(0, 16),
         endDate: data.end_date ? new Date(data.end_date).toISOString().slice(0, 16) : '',
         tags: data.tags || [],
-        imageUrl: data.image_url || ''
+        imageUrl: data.image_url || '',
+        latitude: data.latitude || 0,
+        longitude: data.longitude || 0
       })
     } catch (error) {
       console.error('Error loading event:', error)
@@ -97,6 +90,23 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleAddressComplete = (addressData: {
+    locationName: string
+    address: string
+    city: string
+    lat: number
+    lng: number
+  }) => {
+    setFormData(prev => ({
+      ...prev,
+      locationName: addressData.locationName,
+      address: addressData.address,
+      city: addressData.city,
+      latitude: addressData.lat,
+      longitude: addressData.lng
+    }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -110,30 +120,32 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
     setSubmitting(true)
 
     try {
-      // Convert camelCase to snake_case for database
-      const updates = {
+      if (!session?.access_token) {
+        toast.error('Brak sesji. Zaloguj się ponownie.')
+        return
+      }
+
+      // Use API format (camelCase)
+      const eventData = {
         title: formData.title,
         description: formData.description,
         category: formData.category,
-        age_min: formData.ageMin,
-        age_max: formData.ageMax,
-        price_type: formData.priceType,
-        price: formData.priceType === 'FREE' ? null : formData.price,
-        location_name: formData.locationName,
+        ageMin: formData.ageMin,
+        ageMax: formData.ageMax,
+        priceType: formData.priceType,
+        price: formData.priceType === 'FREE' ? 0 : formData.price,
+        locationName: formData.locationName,
         address: formData.address,
         city: formData.city,
-        start_date: formData.startDate,
-        end_date: formData.endDate || null,
+        startDate: formData.startDate,
+        endDate: formData.endDate || undefined,
         tags: formData.tags,
-        image_url: formData.imageUrl || null
+        imageUrl: formData.imageUrl || undefined,
+        latitude: formData.latitude,
+        longitude: formData.longitude
       }
 
-      const { error } = await supabase
-        .from('events')
-        .update(updates)
-        .eq('id', params.id)
-
-      if (error) throw error
+      await api.updateEvent(session.access_token, params.id, eventData)
 
       toast.success('Wydarzenie zaktualizowane!')
       router.push(`/events/${params.id}`)
@@ -150,14 +162,13 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
       return
     }
 
+    if (!session?.access_token) {
+      toast.error('Brak sesji. Zaloguj się ponownie.')
+      return
+    }
+
     try {
-      const { error } = await supabase
-        .from('events')
-        .update({ status: 'ARCHIVED' })
-        .eq('id', params.id)
-
-      if (error) throw error
-
+      await api.deleteEvent(session.access_token, params.id)
       toast.success('Wydarzenie zostało usunięte')
       router.push('/my-events')
     } catch (error) {
@@ -220,8 +231,8 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Wybierz kategorię</option>
-              {CATEGORIES.map(cat => (
-                <option key={cat.value} value={cat.value}>{cat.label}</option>
+              {Object.entries(EVENT_CATEGORIES).map(([key, label]) => (
+                <option key={key} value={key.toUpperCase()}>{label}</option>
               ))}
             </select>
           </div>
@@ -308,12 +319,12 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Adres *
             </label>
-            <input
-              type="text"
-              required
+            <GoogleStyleAddressInput
               value={formData.address}
-              onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(value) => setFormData({ ...formData, address: value })}
+              onAddressComplete={handleAddressComplete}
+              placeholder="🔍 np. Pałac Kultury lub ul. Marszałkowska 10, Warszawa"
+              required
             />
           </div>
 
@@ -324,15 +335,28 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
             <select
               required
               value={formData.city}
-              onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+              onChange={(e) => {
+                const selectedCity = e.target.value
+                const coords = CITY_COORDINATES[selectedCity] || { lat: 52.23, lng: 21.01 }
+                setFormData({ 
+                  ...formData, 
+                  city: selectedCity,
+                  latitude: coords.lat,
+                  longitude: coords.lng
+                })
+              }}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Wybierz miasto</option>
-              {CITIES.map(city => (
+              {POLISH_CITIES.map(city => (
                 <option key={city} value={city}>{city}</option>
               ))}
             </select>
           </div>
+
+          {/* Hidden coordinates - automatically set based on city */}
+          <input type="hidden" name="latitude" value={formData.latitude} />
+          <input type="hidden" name="longitude" value={formData.longitude} />
 
           {/* Dates */}
           <div className="grid grid-cols-2 gap-4">

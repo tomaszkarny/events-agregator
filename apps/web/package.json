@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "@events-agregator/shared": "*",
+    "@googlemaps/js-api-loader": "^1.16.8",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.48.0",
     "@tanstack/react-query": "^5.62.11",
     "@types/dompurify": "^3.0.5",
+    "@types/google.maps": "^3.58.1",
     "isomorphic-dompurify": "^2.25.0",
     "next": "15.1.0",
     "react": "19.0.0",

@@ -1,7 +1,6 @@
 import Parser from 'rss-parser'
 import { addDays, parseISO } from 'date-fns'
 import { BaseScraper, ScrapedEvent } from './base-scraper'
-import { PriceType } from './base-scraper'
 import { logger } from '../utils/logger'
 
 export class RssScraper extends BaseScraper {
@@ -55,7 +54,7 @@ export class RssScraper extends BaseScraper {
       description: this.normalizeText(item.contentSnippet || item.content || ''),
       ageMin: ageRange.min,
       ageMax: ageRange.max,
-      priceType: PriceType.FREE, // Assume free for RSS events
+      priceType: 'FREE', // Assume free for RSS events
       locationName: item.eventLocation || 'Miejsce do potwierdzenia',
       address: 'Do potwierdzenia',
       city: 'Warszawa', // Default city

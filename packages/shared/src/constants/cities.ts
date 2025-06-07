@@ -1,0 +1,23 @@
+export const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
+  'Warszawa': { lat: 52.2296756, lng: 21.0122287 },
+  'Kraków': { lat: 50.0646501, lng: 19.9449799 },
+  'Łódź': { lat: 51.7592485, lng: 19.4559833 },
+  'Wrocław': { lat: 51.1078852, lng: 17.0385376 },
+  'Poznań': { lat: 52.4063740, lng: 16.9251681 },
+  'Gdańsk': { lat: 54.3520252, lng: 18.6466384 },
+  'Szczecin': { lat: 53.4285438, lng: 14.5528116 },
+  'Bydgoszcz': { lat: 53.1234804, lng: 18.0084378 },
+  'Lublin': { lat: 51.2464536, lng: 22.5684463 },
+  'Białystok': { lat: 53.1324886, lng: 23.1688403 },
+  'Katowice': { lat: 50.2648919, lng: 19.0237815 },
+  'Gdynia': { lat: 54.5188898, lng: 18.5305409 },
+  'Częstochowa': { lat: 50.8118195, lng: 19.1203094 },
+  'Radom': { lat: 51.4027236, lng: 21.1471333 },
+  'Sosnowiec': { lat: 50.2862618, lng: 19.1043154 },
+  'Toruń': { lat: 53.0137902, lng: 18.5984437 },
+  'Kielce': { lat: 50.8660773, lng: 20.6285677 },
+  'Rzeszów': { lat: 50.0411867, lng: 21.9991196 },
+  'Gliwice': { lat: 50.2944923, lng: 18.6713802 },
+  'Zabrze': { lat: 50.3249278, lng: 18.7857186 },
+  'Olsztyn': { lat: 53.7759800, lng: 20.4777100 }
+}
