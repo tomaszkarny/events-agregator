@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/auth-context-v2'
 import { toast } from '@/lib/toast'
 import { api } from '@/lib/api'
 import { GoogleStyleAddressInput } from '@/components/google-style-address-input'
+import { DraggableMap } from '@/components/draggable-map'
 import { CITY_COORDINATES, POLISH_CITIES, EVENT_CATEGORIES } from '@events-agregator/shared'
 
 export default function EditEventPage({ params }: { params: { id: string } }) {
@@ -106,6 +107,14 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
       city: addressData.city,
       latitude: addressData.lat,
       longitude: addressData.lng
+    }))
+  }
+
+  const handleMapLocationChange = (lat: number, lng: number) => {
+    setFormData(prev => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng
     }))
   }
 
@@ -327,6 +336,22 @@ export default function EditEventPage({ params }: { params: { id: string } }) {
               required
             />
           </div>
+
+          {/* Interactive Map - shows when coordinates exist */}
+          {formData.latitude !== 0 && formData.longitude !== 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Dokładna lokalizacja
+              </label>
+              <DraggableMap
+                latitude={formData.latitude}
+                longitude={formData.longitude}
+                onLocationChange={handleMapLocationChange}
+                locationName={formData.locationName || 'Miejsce wydarzenia'}
+                className="border border-gray-300 rounded-md overflow-hidden"
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">

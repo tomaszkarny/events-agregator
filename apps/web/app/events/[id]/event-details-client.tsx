@@ -6,6 +6,7 @@ import { pl } from 'date-fns/locale'
 import { Header } from '@/components/header'
 import { ImageGallery } from '@/components/image-gallery'
 import { LocationMap } from '@/components/location-map'
+import { CoordinatesDebug } from '@/components/coordinates-debug'
 import { ShareButtons } from '@/components/share-buttons'
 import { trackEventClick } from '@/lib/supabase-queries'
 import { toast } from '@/lib/toast'
@@ -146,14 +147,30 @@ export function EventDetailsClient({ event }: EventDetailsClientProps) {
             {/* Location with Interactive Map */}
             <div className="mb-6">
               <h2 className="text-xl font-semibold mb-3">Lokalizacja</h2>
-              <LocationMap 
-                locationName={event.locationName}
-                address={event.address}
-                city={event.city}
-                lat={event.lat}
-                lng={event.lng}
-                postalCode={event.postalCode}
-              />
+              <div className="bg-white rounded-lg p-4 shadow-sm border">
+                <div className="mb-4">
+                  <h3 className="font-medium text-gray-900">{event.locationName}</h3>
+                  <p className="text-gray-600">{event.address}</p>
+                </div>
+                {event.lat && event.lng && (
+                  <>
+                    <LocationMap 
+                      latitude={event.lat}
+                      longitude={event.lng}
+                      title={event.locationName}
+                      address={event.address}
+                      showGoogleLink={true}
+                    />
+                    <CoordinatesDebug
+                      latitude={event.lat}
+                      longitude={event.lng}
+                      title={event.locationName}
+                      address={event.address}
+                      className="mt-4"
+                    />
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Description */}

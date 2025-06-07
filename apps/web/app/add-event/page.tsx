@@ -7,6 +7,7 @@ import { useCreateEvent } from '@/hooks/use-events'
 import { useAuth } from '@/contexts/auth-context-v2'
 import { Header } from '@/components/header'
 import { GoogleStyleAddressInput } from '@/components/google-style-address-input'
+import { DraggableMap } from '@/components/draggable-map'
 import { toast } from '@/lib/toast'
 
 export default function AddEvent() {
@@ -59,6 +60,14 @@ export default function AddEvent() {
       city: addressData.city,
       lat: addressData.lat,
       lng: addressData.lng
+    }))
+  }
+
+  const handleMapLocationChange = (lat: number, lng: number) => {
+    setFormData(prev => ({
+      ...prev,
+      lat,
+      lng
     }))
   }
 
@@ -339,6 +348,22 @@ export default function AddEvent() {
                 required
               />
             </div>
+
+            {/* Interactive Map - shows after address is selected */}
+            {formData.lat !== 0 && formData.lng !== 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dokładna lokalizacja
+                </label>
+                <DraggableMap
+                  latitude={formData.lat}
+                  longitude={formData.lng}
+                  onLocationChange={handleMapLocationChange}
+                  locationName={formData.locationName || 'Miejsce wydarzenia'}
+                  className="border border-gray-300 rounded-md overflow-hidden"
+                />
+              </div>
+            )}
 
             {/* Hidden coordinates - automatically set based on city */}
             <input type="hidden" name="lat" value={formData.lat} />
