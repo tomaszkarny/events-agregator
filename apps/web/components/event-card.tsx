@@ -4,6 +4,9 @@ import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { sanitizeText } from '@/lib/sanitize'
+import { useAuth } from '@/contexts/auth-context-v2'
+import { useIsFavorited, useToggleFavorite } from '@/hooks/use-favorites'
+import { useState } from 'react'
 
 interface EventCardProps {
   event: {
@@ -23,6 +26,7 @@ interface EventCardProps {
     status: string
     organizerName?: string
   }
+  favoriteTheme?: 'red' | 'blue' // Optional theme configuration
 }
 
 const categoryColors = {
@@ -40,18 +44,98 @@ const statusBadges = {
   REJECTED: { label: 'Odrzucone', class: 'bg-red-100 text-red-800' },
 }
 
-export function EventCard({ event }: EventCardProps) {
+// Favorite theme configurations
+const favoriteThemes = {
+  red: {
+    favoritedColors: 'text-red-500 hover:text-red-600 focus:text-red-600 bg-red-50 hover:bg-red-100 focus:bg-red-100',
+    unfavoritedColors: 'text-gray-400 hover:text-red-500 focus:text-red-500 bg-white hover:bg-red-50 focus:bg-red-50',
+    focusRing: 'focus:ring-red-500',
+    countColor: 'text-red-600'
+  },
+  blue: {
+    favoritedColors: 'text-blue-500 hover:text-blue-600 focus:text-blue-600 bg-blue-50 hover:bg-blue-100 focus:bg-blue-100',
+    unfavoritedColors: 'text-gray-400 hover:text-blue-500 focus:text-blue-500 bg-white hover:bg-blue-50 focus:bg-blue-50',
+    focusRing: 'focus:ring-blue-500',
+    countColor: 'text-blue-600'
+  }
+}
+
+export function EventCard({ event, favoriteTheme = 'red' }: EventCardProps) {
   const startDate = new Date(event.startDate)
+  const { user } = useAuth()
+  const { isFavorited, isLoading: isFavoriteLoading } = useIsFavorited(event.id)
+  const toggleFavorite = useToggleFavorite()
+  const [isToggling, setIsToggling] = useState(false)
   
   // Status-based approach (consistent with filtering)
   const isExpired = event.status === 'EXPIRED'
   
   const categoryClass = categoryColors[event.category as keyof typeof categoryColors] || categoryColors.INNE
   const statusBadge = statusBadges[event.status as keyof typeof statusBadges]
+  const theme = favoriteThemes[favoriteTheme]
+
+  const handleToggleFavorite = async (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (!user || isToggling) return
+    
+    setIsToggling(true)
+    try {
+      await toggleFavorite.mutateAsync({
+        eventId: event.id,
+        eventData: event // Pass full event data for complete optimistic updates
+      })
+    } finally {
+      setIsToggling(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Handle Enter and Space keys for accessibility
+    if (e.key === 'Enter' || e.key === ' ') {
+      handleToggleFavorite(e)
+    }
+  }
 
   return (
     <Link href={`/events/${event.id}`} className="block">
       <div className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 h-full cursor-pointer relative ${isExpired ? 'opacity-60' : ''}`}>
+        {/* Favorite Heart Icon - Only for authenticated users */}
+        {user && (
+          <button
+            onClick={handleToggleFavorite}
+            onKeyDown={handleKeyDown}
+            disabled={isToggling || isFavoriteLoading}
+            className={`absolute top-4 right-4 z-10 p-2 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 ${theme.focusRing} focus:ring-offset-2 ${
+              isToggling || isFavoriteLoading ? 'scale-75' : 'hover:scale-110 focus:scale-110'
+            } ${
+              isFavoriteLoading ? 'animate-pulse' : ''
+            } ${
+              isFavorited 
+                ? theme.favoritedColors
+                : `${theme.unfavoritedColors} shadow-sm`
+            }`}
+            aria-label={isFavorited ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+            tabIndex={0}
+          >
+            <svg
+              className="w-5 h-5"
+              fill={isFavorited ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              strokeWidth={2}
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 8.5c0-2.485-2.015-4.5-4.5-4.5-1.74 0-3.25.99-4 2.439A4.487 4.487 0 008.5 4C6.015 4 4 6.015 4 8.5c0 .886.256 1.714.7 2.414L12 21l7.3-10.086A4.486 4.486 0 0021 8.5z"
+              />
+            </svg>
+          </button>
+        )}
+
         {/* Status badges */}
         {(event.status === 'DRAFT' || isExpired) && (
           <div className="mb-3 flex gap-2 flex-wrap">

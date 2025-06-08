@@ -33,16 +33,32 @@ export async function middleware(request: NextRequest) {
 
   // This will refresh session if expired - required for Server Components
   // Add timeout protection to prevent hanging
+  let user = null
   try {
     const authPromise = supabase.auth.getUser()
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Auth check timeout')), 3000)
     })
     
-    await Promise.race([authPromise, timeoutPromise])
+    const authResult = await Promise.race([authPromise, timeoutPromise]) as any
+    user = authResult?.data?.user || null
   } catch (error) {
     console.warn('Middleware auth check failed or timed out:', error)
     // Continue anyway - don't block the request
+  }
+
+  // Protected routes that require authentication
+  const protectedRoutes = ['/favorites', '/profile', '/my-events', '/add-event']
+  const isProtectedRoute = protectedRoutes.some(route => 
+    request.nextUrl.pathname.startsWith(route)
+  )
+
+  // Redirect to home if accessing protected route without authentication
+  if (isProtectedRoute && !user) {
+    const redirectUrl = new URL('/', request.url)
+    redirectUrl.searchParams.set('auth-required', 'true')
+    redirectUrl.searchParams.set('redirect', request.nextUrl.pathname)
+    return NextResponse.redirect(redirectUrl)
   }
 
   return response

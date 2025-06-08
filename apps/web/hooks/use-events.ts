@@ -55,9 +55,9 @@ export function useUpdateEvent() {
   return useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Parameters<typeof updateEvent>[1] }) => 
       updateEvent(id, updates),
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['events'] })
-      queryClient.invalidateQueries({ queryKey: ['event', data.id] })
+      queryClient.invalidateQueries({ queryKey: ['event', data?.id || variables.id] })
       queryClient.invalidateQueries({ queryKey: ['user-events'] })
     },
   })

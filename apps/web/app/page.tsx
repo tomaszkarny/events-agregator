@@ -1,19 +1,43 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useEvents } from '@/hooks/use-events'
 import { POLISH_CITIES, EVENT_CATEGORIES } from '@events-agregator/shared'
 import { Header } from '@/components/header'
 import { EventCard } from '@/components/event-card'
 import { supabase } from '@/lib/supabase-client'
+import { toast } from '@/lib/toast'
 
 export default function Home() {
+  const searchParams = useSearchParams()
   const [filters, setFilters] = useState({
     city: '',
     category: '',
     search: '',
   })
   const [showExpiredEvents, setShowExpiredEvents] = useState(false)
+
+  // Handle auth-required redirect from middleware
+  useEffect(() => {
+    const authRequired = searchParams.get('auth-required')
+    const redirectPath = searchParams.get('redirect')
+    
+    if (authRequired === 'true' && redirectPath) {
+      const routeNames: Record<string, string> = {
+        '/favorites': 'ulubionych',
+        '/profile': 'profilu',
+        '/my-events': 'swoich wydarzeń',
+        '/add-event': 'dodawania wydarzeń'
+      }
+      
+      const routeName = routeNames[redirectPath] || 'tej strony'
+      toast.error(`Musisz być zalogowany aby zobaczyć ${routeName}`)
+      
+      // Clean up URL parameters
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [searchParams])
 
   const { data, isLoading, error } = useEvents({
     ...filters,

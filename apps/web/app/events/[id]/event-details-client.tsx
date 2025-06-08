@@ -1,15 +1,18 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { Header } from '@/components/header'
 import { ImageGallery } from '@/components/image-gallery'
 import { LocationMap } from '@/components/location-map'
-import { CoordinatesDebug } from '@/components/coordinates-debug'
 import { ShareButtons } from '@/components/share-buttons'
 import { trackEventClick } from '@/lib/supabase-queries'
 import { toast } from '@/lib/toast'
+import { useAuth } from '@/contexts/auth-context-v2'
+import { useIsFavorited, useToggleFavorite } from '@/hooks/use-favorites'
+import { EventApiResponse } from '@/lib/types'
 
 const categoryColors = {
   WARSZTATY: 'bg-purple-100 text-purple-800',
@@ -26,17 +29,47 @@ const statusBadges = {
 }
 
 interface EventDetailsClientProps {
-  event: any // Using any for now, should be proper type
+  event: EventApiResponse
 }
 
 export function EventDetailsClient({ event }: EventDetailsClientProps) {
   const router = useRouter()
+  const { user } = useAuth()
+  const { isFavorited, isLoading: isFavoriteLoading } = useIsFavorited(event.id)
+  const toggleFavorite = useToggleFavorite()
+  const [isToggling, setIsToggling] = useState(false)
 
   const handleClick = async () => {
     try {
       await trackEventClick(event.id)
     } catch (error) {
       // Silent fail for analytics
+    }
+  }
+
+  const handleToggleFavorite = async () => {
+    if (!user) {
+      toast.error('Musisz być zalogowany aby dodać do ulubionych')
+      return
+    }
+    
+    if (isToggling) return
+    
+    setIsToggling(true)
+    try {
+      await toggleFavorite.mutateAsync({
+        eventId: event.id,
+        eventData: event
+      })
+    } finally {
+      setIsToggling(false)
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      handleToggleFavorite()
     }
   }
 
@@ -150,7 +183,7 @@ export function EventDetailsClient({ event }: EventDetailsClientProps) {
               <div className="bg-white rounded-lg p-4 shadow-sm border">
                 <div className="mb-4">
                   <h3 className="font-medium text-gray-900">{event.locationName}</h3>
-                  <p className="text-gray-600">{event.address}</p>
+                  <p className="text-gray-600">{event.address || 'Adres niedostępny'}</p>
                 </div>
                 {event.lat && event.lng && (
                   <>
@@ -158,15 +191,8 @@ export function EventDetailsClient({ event }: EventDetailsClientProps) {
                       latitude={event.lat}
                       longitude={event.lng}
                       title={event.locationName}
-                      address={event.address}
+                      address={event.address || ''}
                       showGoogleLink={true}
-                    />
-                    <CoordinatesDebug
-                      latitude={event.lat}
-                      longitude={event.lng}
-                      title={event.locationName}
-                      address={event.address}
-                      className="mt-4"
                     />
                   </>
                 )}
@@ -233,12 +259,76 @@ export function EventDetailsClient({ event }: EventDetailsClientProps) {
               >
                 📋 Skopiuj link
               </button>
-              <button
-                onClick={() => toast.info('Funkcja ulubionych będzie dostępna wkrótce')}
-                className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium"
-              >
-                ❤️ Dodaj do ulubionych
-              </button>
+              {user ? (
+                <button
+                  onClick={handleToggleFavorite}
+                  onKeyDown={handleKeyDown}
+                  disabled={isToggling || isFavoriteLoading}
+                  className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                    isToggling || isFavoriteLoading ? 'scale-95' : 'hover:scale-105 focus:scale-105'
+                  } ${
+                    isFavoriteLoading ? 'animate-pulse' : ''
+                  } ${
+                    isFavorited 
+                      ? 'bg-red-100 text-red-700 hover:bg-red-200 focus:bg-red-200 focus:ring-red-500' 
+                      : 'bg-gray-200 text-gray-800 hover:bg-gray-300 focus:bg-gray-300 focus:ring-gray-500'
+                  }`}
+                  aria-label={isFavorited ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+                  tabIndex={0}
+                >
+                  {isToggling ? (
+                    <span className="flex items-center">
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {isFavorited ? 'Usuwanie...' : 'Dodawanie...'}
+                    </span>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-5 h-5 inline mr-2"
+                        fill={isFavorited ? 'currentColor' : 'none'}
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M21 8.5c0-2.485-2.015-4.5-4.5-4.5-1.74 0-3.25.99-4 2.439A4.487 4.487 0 008.5 4C6.015 4 4 6.015 4 8.5c0 .886.256 1.714.7 2.414L12 21l7.3-10.086A4.486 4.486 0 0021 8.5z"
+                        />
+                      </svg>
+                      {isFavorited ? 'Usuń z ulubionych' : 'Dodaj do ulubionych'}
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    toast.error('Musisz być zalogowany aby dodać do ulubionych')
+                  }}
+                  className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                  aria-label="Zaloguj się aby dodać do ulubionych"
+                >
+                  <svg
+                    className="w-5 h-5 inline mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M21 8.5c0-2.485-2.015-4.5-4.5-4.5-1.74 0-3.25.99-4 2.439A4.487 4.487 0 008.5 4C6.015 4 4 6.015 4 8.5c0 .886.256 1.714.7 2.414L12 21l7.3-10.086A4.486 4.486 0 0021 8.5z"
+                    />
+                  </svg>
+                  Dodaj do ulubionych
+                </button>
+              )}
             </div>
 
             {/* Stats */}

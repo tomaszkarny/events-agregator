@@ -2,15 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useAuth } from '@/contexts/auth-context-v2'
 import { Header } from '@/components/header'
 import { toast } from '@/lib/toast'
 import { getChildProfiles } from '@/lib/supabase-queries'
 import { ChildProfile } from '@/lib/types'
+import { useFavoritesCount } from '@/hooks/use-favorites'
 
 export default function Profile() {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
+  const favoritesCount = useFavoritesCount()
   const [isEditing, setIsEditing] = useState(false)
   const [childProfiles, setChildProfiles] = useState<ChildProfile[]>([])
   const [formData, setFormData] = useState({
@@ -114,13 +117,13 @@ export default function Profile() {
                   <span className="text-gray-600">Aktywne alerty:</span>
                   <span className="font-medium">-</span>
                 </div>
-                <div className="flex justify-between">
+                <Link href="/favorites" className="flex justify-between hover:bg-gray-50 -mx-2 px-2 py-1 rounded transition-colors">
                   <span className="text-gray-600">Ulubione:</span>
-                  <span className="font-medium">-</span>
-                </div>
+                  <span className="font-medium text-blue-600">{favoritesCount}</span>
+                </Link>
               </div>
               <p className="text-xs text-gray-500 mt-4">
-                Statystyki będą dostępne wkrótce
+                * Niektóre statystyki będą dostępne wkrótce
               </p>
             </div>
           </div>

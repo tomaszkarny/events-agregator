@@ -1,38 +1,5 @@
 import { supabase } from './supabase-client'
-
-// Define types locally for now
-interface Event {
-  id: string
-  title: string
-  description: string
-  location_name: string
-  address: string
-  city: string
-  lat?: number
-  lng?: number
-  age_min: number
-  age_max: number
-  price_type: 'FREE' | 'PAID' | 'DONATION'
-  price?: number
-  currency?: string
-  category: string
-  tags: string[]
-  image_urls?: string[]
-  organizer_id: string
-  organizer_name: string
-  start_date: string
-  end_date?: string
-  status: string
-  view_count: number
-  click_count: number
-  created_at: string
-  updated_at: string
-  source_url?: string
-  source_hash?: string
-  source_id?: string
-  source_name?: string
-  postal_code?: string
-}
+import { EventDbRow, EventApiResponse } from './types'
 
 interface Profile {
   id: string
@@ -45,7 +12,7 @@ interface Profile {
 }
 
 // Transform snake_case database fields to camelCase for components
-function transformEvent(event: any) {
+function transformEvent(event: EventDbRow | null): EventApiResponse | null {
   if (!event) return null
   
   return {
@@ -208,7 +175,7 @@ export async function getEvent(id: string) {
   return transformEvent(data)
 }
 
-export async function createEvent(event: Partial<Event>) {
+export async function createEvent(event: Partial<EventDbRow>) {
   try {
     // Event data is already in snake_case format from the form
     // API endpoint expects snake_case for database insertion
@@ -233,7 +200,7 @@ export async function createEvent(event: Partial<Event>) {
   }
 }
 
-export async function updateEvent(id: string, updates: Partial<Event>) {
+export async function updateEvent(id: string, updates: Partial<EventDbRow>) {
   const { data, error } = await supabase
     .from('events')
     .update(updates)

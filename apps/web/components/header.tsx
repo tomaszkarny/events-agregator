@@ -126,6 +126,14 @@ export function Header() {
                           📝 Dodaj wydarzenie
                         </Link>
                         <Link
+                          href="/favorites"
+                          className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                          role="menuitem"
+                          onClick={() => setShowUserMenu(false)}
+                        >
+                          ❤️ Ulubione
+                        </Link>
+                        <Link
                           href="/my-events"
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                           role="menuitem"
