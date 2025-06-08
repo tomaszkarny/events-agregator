@@ -42,19 +42,29 @@ const statusBadges = {
 
 export function EventCard({ event }: EventCardProps) {
   const startDate = new Date(event.startDate)
-  const isExpired = startDate < new Date()
+  
+  // Status-based approach (consistent with filtering)
+  const isExpired = event.status === 'EXPIRED'
+  
   const categoryClass = categoryColors[event.category as keyof typeof categoryColors] || categoryColors.INNE
   const statusBadge = statusBadges[event.status as keyof typeof statusBadges]
 
   return (
     <Link href={`/events/${event.id}`} className="block">
-      <div className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 h-full cursor-pointer">
-        {/* Status badge for DRAFT events */}
-        {event.status === 'DRAFT' && (
-          <div className="mb-3">
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBadge.class}`}>
-              🕐 {statusBadge.label}
-            </span>
+      <div className={`bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6 h-full cursor-pointer relative ${isExpired ? 'opacity-60' : ''}`}>
+        {/* Status badges */}
+        {(event.status === 'DRAFT' || isExpired) && (
+          <div className="mb-3 flex gap-2 flex-wrap">
+            {event.status === 'DRAFT' && (
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusBadge.class}`}>
+                🕐 {statusBadge.label}
+              </span>
+            )}
+            {isExpired && (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                ⏰ Zakończone
+              </span>
+            )}
           </div>
         )}
 
@@ -126,12 +136,6 @@ export function EventCard({ event }: EventCardProps) {
           )}
         </div>
 
-        {/* Expired overlay */}
-        {isExpired && (
-          <div className="absolute inset-0 bg-gray-100 bg-opacity-75 rounded-lg flex items-center justify-center">
-            <span className="text-gray-600 font-medium">Wydarzenie zakończone</span>
-          </div>
-        )}
       </div>
     </Link>
   )

@@ -13,11 +13,13 @@ export default function Home() {
     category: '',
     search: '',
   })
+  const [showExpiredEvents, setShowExpiredEvents] = useState(false)
 
   const { data, isLoading, error } = useEvents({
     ...filters,
     limit: 25,
-    offset: 0
+    offset: 0,
+    includeExpiredEvents: showExpiredEvents
   })
   
   // Debug logging
@@ -107,6 +109,20 @@ export default function Home() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+          </div>
+          
+          {/* Expired Events Toggle */}
+          <div className="mt-4 flex items-center">
+            <input
+              type="checkbox"
+              id="showExpiredEvents"
+              checked={showExpiredEvents}
+              onChange={(e) => setShowExpiredEvents(e.target.checked)}
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label htmlFor="showExpiredEvents" className="ml-2 text-sm text-gray-700">
+              Pokaż zakończone wydarzenia
+            </label>
           </div>
         </div>
       </div>

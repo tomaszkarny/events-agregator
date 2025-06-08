@@ -30,6 +30,7 @@ const searchEventsSchema = z.object({
   search: z.string().optional(),
   limit: z.string().transform(Number).default('25'),
   cursor: z.string().optional(),
+  includeExpiredEvents: z.string().transform((val) => val === 'true').optional(),
 })
 
 // GET /api/events - Search events
@@ -39,11 +40,17 @@ router.get('/', async (req, res, next) => {
     
     // Query parameters will be handled in Supabase query builder
 
-    // Build Supabase query
+    // Build Supabase query - Status-based filtering (proper approach)
     let supabaseQuery = supabase
       .from('events')
       .select('*')
-      .in('status', ['ACTIVE', 'DRAFT'])
+    
+    // For public API, show only ACTIVE (and optionally EXPIRED) events
+    if (query.includeExpiredEvents) {
+      supabaseQuery = supabaseQuery.in('status', ['ACTIVE', 'EXPIRED'])
+    } else {
+      supabaseQuery = supabaseQuery.eq('status', 'ACTIVE')
+    }
     
     if (query.city) {
       supabaseQuery = supabaseQuery.eq('city', query.city)

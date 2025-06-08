@@ -81,6 +81,7 @@ export async function searchEvents(params: {
   search?: string
   limit?: number
   offset?: number
+  includeExpiredEvents?: boolean  // Status-based filtering instead of date-based
 }) {
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'server'
   console.log('searchEvents called with params:', params)
@@ -94,9 +95,12 @@ export async function searchEvents(params: {
       .from('events')
       .select('*', { count: 'exact' })
     
-    // CRITICAL: Only show ACTIVE events to public users
-    console.log('Applying status filter: ACTIVE only')
-    query = query.eq('status', 'ACTIVE')
+    // Status-based filtering (proper approach)
+    if (params.includeExpiredEvents) {
+      query = query.in('status', ['ACTIVE', 'EXPIRED'])
+    } else {
+      query = query.eq('status', 'ACTIVE')
+    }
     
     // Apply filters conditionally
     if (params.city && params.city.trim()) {
