@@ -130,7 +130,17 @@ class ApiClient {
 
   // Alerts
   async getAlerts(token: string) {
-    return this.request<Array<{id: string; name: string; filters: any}>>('/alerts', {
+    return this.request<Array<{
+      id: string
+      name: string
+      filters: any
+      frequency: 'IMMEDIATE' | 'DAILY' | 'WEEKLY'
+      channels: ('PUSH' | 'EMAIL' | 'IN_APP')[]
+      is_active: boolean
+      created_at: string
+      updated_at: string
+      user_id: string
+    }>>('/alerts', {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -138,7 +148,17 @@ class ApiClient {
   }
 
   async createAlert(token: string, data: {name: string; filters: any; frequency: string; channels: string[]}) {
-    return this.request<{id: string; name: string; filters: any}>('/alerts', {
+    return this.request<{
+      id: string
+      name: string
+      filters: any
+      frequency: 'IMMEDIATE' | 'DAILY' | 'WEEKLY'
+      channels: ('PUSH' | 'EMAIL' | 'IN_APP')[]
+      is_active: boolean
+      created_at: string
+      updated_at: string
+      user_id: string
+    }>('/alerts', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -147,8 +167,18 @@ class ApiClient {
     })
   }
 
-  async updateAlert(token: string, id: string, data: Partial<{name: string; filters: any; frequency: string; channels: string[]}>) {
-    return this.request<{id: string; name: string; filters: any}>(`/alerts/${id}`, {
+  async updateAlert(token: string, id: string, data: Partial<{name: string; filters: any; frequency: string; channels: string[]; isActive: boolean}>) {
+    return this.request<{
+      id: string
+      name: string
+      filters: any
+      frequency: 'IMMEDIATE' | 'DAILY' | 'WEEKLY'
+      channels: ('PUSH' | 'EMAIL' | 'IN_APP')[]
+      is_active: boolean
+      created_at: string
+      updated_at: string
+      user_id: string
+    }>(`/alerts/${id}`, {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${token}`,
