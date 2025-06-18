@@ -5,11 +5,14 @@ import { logger } from '../utils/logger'
 
 /**
  * Scraper dla CzasDzieci.pl - prawdziwe źródło wydarzeń dla dzieci
- * RSS Feed: https://czasdzieci.pl/wydarzenia/rss/
+ * RSS Feeds: 
+ * - Today: https://czasdzieci.pl/rss_warszawa_dzis.xml
+ * - Tomorrow: https://czasdzieci.pl/rss_warszawa_jutro.xml
  */
 export class CzasDzieciScraper extends BaseScraper {
   name = 'czas-dzieci'
-  sourceUrl = 'https://czasdzieci.pl/wydarzenia/rss/'
+  sourceUrl = 'https://czasdzieci.pl/rss_warszawa_dzis.xml'
+  tomorrowUrl = 'https://czasdzieci.pl/rss_warszawa_jutro.xml'
   
   private parser = new Parser({
     customFields: {
@@ -23,36 +26,57 @@ export class CzasDzieciScraper extends BaseScraper {
   })
   
   protected async scrapeEvents(): Promise<ScrapedEvent[]> {
+    const events: ScrapedEvent[] = []
+    
+    // Scrape today's events
     try {
-      logger.info(`Fetching RSS from: ${this.sourceUrl}`)
-      const feed = await this.parser.parseURL(this.sourceUrl)
-      const events: ScrapedEvent[] = []
+      logger.info(`Fetching today's RSS from: ${this.sourceUrl}`)
+      const todayFeed = await this.parser.parseURL(this.sourceUrl)
+      logger.info(`Found ${todayFeed.items?.length || 0} items in today's RSS`)
       
-      logger.info(`Found ${feed.items?.length || 0} items in RSS`)
-      
-      for (const item of feed.items || []) {
+      for (const item of todayFeed.items || []) {
         try {
-          const event = this.parseRssItem(item)
+          const event = this.parseRssItem(item, 0) // today
           if (event) {
             events.push(event)
           }
         } catch (error) {
-          logger.error(`Failed to parse RSS item: ${item.title}`, { error })
+          logger.error(`Failed to parse today's RSS item: ${item.title}`, { error })
         }
       }
-      
-      logger.info(`Successfully parsed ${events.length} events from CzasDzieci`)
-      return events
     } catch (error) {
-      logger.error(`Failed to fetch RSS feed: ${this.sourceUrl}`, { 
-        error: error instanceof Error ? error.message : error,
-        stack: error instanceof Error ? error.stack : undefined
+      logger.error(`Failed to fetch today's RSS feed: ${this.sourceUrl}`, { 
+        error: error instanceof Error ? error.message : error
       })
-      return []
     }
+    
+    // Scrape tomorrow's events
+    try {
+      logger.info(`Fetching tomorrow's RSS from: ${this.tomorrowUrl}`)
+      const tomorrowFeed = await this.parser.parseURL(this.tomorrowUrl)
+      logger.info(`Found ${tomorrowFeed.items?.length || 0} items in tomorrow's RSS`)
+      
+      for (const item of tomorrowFeed.items || []) {
+        try {
+          const event = this.parseRssItem(item, 1) // tomorrow
+          if (event) {
+            events.push(event)
+          }
+        } catch (error) {
+          logger.error(`Failed to parse tomorrow's RSS item: ${item.title}`, { error })
+        }
+      }
+    } catch (error) {
+      logger.error(`Failed to fetch tomorrow's RSS feed: ${this.tomorrowUrl}`, { 
+        error: error instanceof Error ? error.message : error
+      })
+    }
+    
+    logger.info(`Successfully parsed ${events.length} events from CzasDzieci`)
+    return events
   }
   
-  private parseRssItem(item: any): ScrapedEvent | null {
+  private parseRssItem(item: any, daysOffset: number = 0): ScrapedEvent | null {
     if (!item.title || !item.link) {
       return null
     }
@@ -67,6 +91,10 @@ export class CzasDzieciScraper extends BaseScraper {
     const categories = item.category || []
     const category = this.mapCategoryFromTags(categories)
     
+    // Add default Warsaw coordinates for now
+    // In the future, we could geocode based on extracted location
+    const warsawCoordinates = { lat: 52.2297, lng: 21.0122 }
+    
     return {
       title: this.normalizeText(item.title),
       description: this.normalizeText(item.description || item.contentSnippet || ''),
@@ -77,10 +105,12 @@ export class CzasDzieciScraper extends BaseScraper {
       locationName: this.extractLocation(fullText) || 'Do potwierdzenia',
       address: 'Zobacz na stronie wydarzenia',
       city: city,
+      lat: warsawCoordinates.lat,
+      lng: warsawCoordinates.lng,
       organizerName: item.creator || 'CzasDzieci.pl',
       sourceUrl: item.link,
       imageUrls: this.extractImages(item),
-      startDate: this.parseDate(item.pubDate) || addDays(new Date(), 7),
+      startDate: addDays(new Date(), daysOffset), // Use offset from today/tomorrow feed
       category: category,
       tags: this.extractTags(categories)
     }

@@ -2,6 +2,9 @@ import { BaseScraper } from './base-scraper'
 import { RssScraper } from './rss-scraper'
 import { BibliotekiWarszawaScraper } from './biblioteki-warszawa-scraper'
 import { CzasDzieciScraper } from './czas-dzieci-scraper'
+import { BialystokHtmlScraper } from './bialystok-html-scraper'
+import { BokBialystokScraper } from './bok-bialystok-scraper'
+import { EpiCentrumScraper } from './epi-centrum-scraper'
 import { TestScraper } from './test-scraper'
 import { logger } from '../utils/logger'
 
@@ -18,6 +21,9 @@ export class ScraperManager {
       new RssScraper(), // Generic RSS scraper
       new BibliotekiWarszawaScraper(), // Warsaw libraries
       new CzasDzieciScraper(), // CzasDzieci.pl RSS feed
+      new BialystokHtmlScraper(), // Białystok municipal events
+      new BokBialystokScraper(), // BOK Białystok cultural events
+      new EpiCentrumScraper(), // Epi-Centrum science center
       new TestScraper(), // Test scraper for system verification
     ]
     
