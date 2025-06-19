@@ -95,9 +95,17 @@ export class CzasDzieciScraper extends BaseScraper {
     // In the future, we could geocode based on extracted location
     const warsawCoordinates = { lat: 52.2297, lng: 21.0122 }
     
+    // Generate fallback description if empty
+    let description = this.normalizeText(item.description || item.contentSnippet || '');
+    if (!description) {
+      // Create a meaningful description based on title and category
+      const categoryText = categories.length > 0 ? categories[0] : 'wydarzenie';
+      description = `${item.title} - ${categoryText} dla dzieci w ${city}. Sprawdź szczegóły na stronie wydarzenia.`;
+    }
+    
     return {
       title: this.normalizeText(item.title),
-      description: this.normalizeText(item.description || item.contentSnippet || ''),
+      description: description,
       ageMin: ageRange.min,
       ageMax: ageRange.max,
       priceType: price.type,
@@ -107,7 +115,7 @@ export class CzasDzieciScraper extends BaseScraper {
       city: city,
       lat: warsawCoordinates.lat,
       lng: warsawCoordinates.lng,
-      organizerName: item.creator || 'CzasDzieci.pl',
+      organizerName: this.extractOrganizer(item),
       sourceUrl: item.link,
       imageUrls: this.extractImages(item),
       startDate: addDays(new Date(), daysOffset), // Use offset from today/tomorrow feed
@@ -229,5 +237,48 @@ export class CzasDzieciScraper extends BaseScraper {
       .map(tag => this.normalizeText(tag.toString()))
       .filter(tag => tag.length > 0)
       .slice(0, 10)
+  }
+  
+  private extractOrganizer(item: any): string {
+    // Extract organizer from content or use sensible default
+    const content = `${item.title || ''} ${item.description || ''} ${item.content || ''}`.toLowerCase()
+    
+    // Try to find venue/organizer names in content
+    if (content.includes('teatr')) {
+      const theaterMatch = content.match(/teatr[a-z]*\s+[a-ząćęłńóśźż\s]+/i)
+      if (theaterMatch) {
+        return this.normalizeText(theaterMatch[0])
+      }
+    }
+    
+    if (content.includes('muzeum')) {
+      const museumMatch = content.match(/muzeum\s+[a-ząćęłńóśźż\s]+/i)
+      if (museumMatch) {
+        return this.normalizeText(museumMatch[0])
+      }
+    }
+    
+    if (content.includes('centrum')) {
+      const centerMatch = content.match(/centrum\s+[a-ząćęłńóśźż\s]+/i)
+      if (centerMatch) {
+        return this.normalizeText(centerMatch[0])
+      }
+    }
+    
+    if (content.includes('dom kultury') || content.includes('dk ')) {
+      return 'Dom Kultury'
+    }
+    
+    // Don't use email as organizer name
+    if (item.creator && !item.creator.includes('@')) {
+      return item.creator
+    }
+    
+    // Default to portal name instead of email
+    return 'CzasDzieci.pl'
+  }
+  
+  protected normalizeText(text: string): string {
+    return text.replace(/\s+/g, ' ').trim()
   }
 }

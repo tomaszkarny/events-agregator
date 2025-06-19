@@ -9,6 +9,7 @@
     "scrape": "tsx src/run-scraper.ts",
     "queue:start": "tsx src/queue-worker.ts",
     "queue:dev": "tsx watch src/queue-worker.ts",
+    "status:cli": "tsx src/cli/status-cli.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
 import path from 'path'
-import { createScrapingWorker, scheduleScraping } from './queue/queue'
+import { createBackgroundWorker, scheduleBackgroundJobs } from './queue/queue'
 import { logger } from './utils/logger'
 
 // Load environment variables
@@ -8,31 +8,31 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') })
 
 async function startQueueWorker() {
   try {
-    logger.info('Starting scraping queue worker...')
+    logger.info('Starting background queue worker...')
     
     // Create and start the worker
-    const worker = createScrapingWorker()
+    const worker = createBackgroundWorker()
     
-    // Schedule periodic scraping
-    await scheduleScraping()
+    // Schedule periodic jobs (scrapers + status updates)
+    await scheduleBackgroundJobs()
     
-    logger.info('Queue worker started successfully')
+    logger.info('Background queue worker started successfully (scrapers + status management)')
     
     // Graceful shutdown
     process.on('SIGINT', async () => {
-      logger.info('Gracefully shutting down queue worker...')
+      logger.info('Gracefully shutting down background worker...')
       await worker.close()
       process.exit(0)
     })
     
     process.on('SIGTERM', async () => {
-      logger.info('Gracefully shutting down queue worker...')
+      logger.info('Gracefully shutting down background worker...')
       await worker.close()
       process.exit(0)
     })
     
   } catch (error) {
-    logger.error('Failed to start queue worker:', error)
+    logger.error('Failed to start background worker:', error)
     process.exit(1)
   }
 }

@@ -1,47 +1,44 @@
-import Parser from 'rss-parser'
 import { addDays, parseISO } from 'date-fns'
+import { load } from 'cheerio'
 import { BaseScraper, ScrapedEvent } from './base-scraper'
 import { logger } from '../utils/logger'
 import axios from 'axios'
 
 export class BibliotekiWarszawaScraper extends BaseScraper {
   name = 'biblioteki-warszawa'
-  sourceUrl = 'https://www.bibliotekiwarszawy.pl/wydarzenia/feed/'
-  
-  private parser = new Parser({
-    customFields: {
-      item: [
-        ['description', 'description'],
-        ['content:encoded', 'content'],
-        ['dc:creator', 'creator'],
-        ['category', 'category', { keepArray: true }]
-      ]
-    }
-  })
+  sourceUrl = 'https://www.bibliotekiwarszawy.pl/wydarzenia/lista/'
   
   protected async scrapeEvents(): Promise<ScrapedEvent[]> {
     try {
-      logger.info(`Fetching RSS from: ${this.sourceUrl}`)
-      const feed = await this.parser.parseURL(this.sourceUrl)
+      logger.info(`Fetching current events from: ${this.sourceUrl}`)
+      
+      const response = await axios.get(this.sourceUrl, {
+        timeout: 15000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Events-Agregator/1.0)',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'pl-PL,pl;q=0.9,en;q=0.8'
+        }
+      })
+      
       const events: ScrapedEvent[] = []
       
-      logger.info(`Found ${feed.items?.length || 0} items in RSS`)
+      // Parse JSON-LD structured data (primary source)
+      const jsonLdEvents = this.parseJsonLdEvents(response.data)
+      events.push(...jsonLdEvents)
       
-      for (const item of feed.items || []) {
-        try {
-          const event = await this.parseRssItem(item)
-          if (event) {
-            events.push(event)
-          }
-        } catch (error) {
-          logger.error(`Failed to parse RSS item: ${item.title}`, { error })
-        }
-      }
+      // Parse HTML content (backup source)
+      const htmlEvents = this.parseHtmlEvents(response.data)
+      events.push(...htmlEvents)
       
-      logger.info(`Successfully parsed ${events.length} events from Biblioteki Warszawy`)
-      return events
+      // Filter to only current events (2025+) and remove duplicates
+      const currentEvents = this.filterCurrentEvents(events)
+      const uniqueEvents = this.removeDuplicates(currentEvents)
+      
+      logger.info(`Successfully parsed ${uniqueEvents.length} current events from Biblioteki Warszawy`)
+      return uniqueEvents
     } catch (error) {
-      logger.error(`Failed to fetch RSS feed: ${this.sourceUrl}`, { 
+      logger.error(`Failed to fetch current events: ${this.sourceUrl}`, { 
         error: error instanceof Error ? error.message : error,
         stack: error instanceof Error ? error.stack : undefined
       })
@@ -49,127 +46,324 @@ export class BibliotekiWarszawaScraper extends BaseScraper {
     }
   }
   
-  private async parseRssItem(item: any): Promise<ScrapedEvent | null> {
-    if (!item.title || !item.link) {
-      return null
-    }
+  private parseJsonLdEvents(htmlContent: string): ScrapedEvent[] {
+    const events: ScrapedEvent[] = []
     
-    // Extract information from description and content
-    const fullText = `${item.title} ${item.description || ''} ${item.content || ''}`
-    const ageRange = this.extractAgeRange(fullText)
-    const category = this.mapCategory(fullText)
-    const locationName = this.extractLocation(fullText) || 'Biblioteka Publiczna'
-    
-    // Get coordinates for Warsaw (default for library events)
-    const coordinates = await this.geocodeAddress('Warszawa, Polska')
-    
-    return {
-      title: this.normalizeText(item.title),
-      description: this.normalizeText(item.description || item.contentSnippet || 'Zapraszamy na wydarzenie w bibliotece'),
-      ageMin: ageRange.min,
-      ageMax: ageRange.max,
-      priceType: 'FREE', // Library events are usually free
-      locationName,
-      address: 'Do potwierdzenia - sprawdź na stronie wydarzenia',
-      city: 'Warszawa',
-      lat: coordinates.lat,
-      lng: coordinates.lng,
-      organizerName: 'Biblioteka Publiczna m.st. Warszawy',
-      sourceUrl: item.link,
-      imageUrls: this.extractImages(item),
-      startDate: this.parseDate(item.pubDate) || addDays(new Date(), 7),
-      category,
-      tags: ['biblioteka', 'kultura', 'edukacja', 'warszawa']
-    }
-  }
-  
-  private extractLocation(text: string): string | null {
-    // Search for library branch names or location patterns
-    const patterns = [
-      /filia\s+(.+?)(?:\.|,|$)/i,
-      /biblioteka\s+(.+?)(?:\.|,|$)/i,
-      /w\s+(.+?)(?:\.|,|$)/i,
-      /miejsce:\s*(.+?)(?:\.|,|$)/i,
-      /lokalizacja:\s*(.+?)(?:\.|,|$)/i,
-      /adres:\s*(.+?)(?:\.|,|$)/i
-    ]
-    
-    for (const pattern of patterns) {
-      const match = text.match(pattern)
-      if (match && match[1]) {
-        return this.normalizeText(match[1])
+    try {
+      // Extract JSON-LD structured data from HTML
+      const jsonLdMatch = htmlContent.match(/<script type="application\/ld\+json">\s*\[(.*?)\]\s*<\/script>/s)
+      if (!jsonLdMatch) {
+        logger.warn('No JSON-LD data found in HTML')
+        return events
       }
-    }
-    
-    return null
-  }
-  
-  private extractImages(item: any): string[] {
-    const images: string[] = []
-    
-    // Check content:encoded for images
-    if (item.content) {
-      const imgMatches = item.content.match(/<img[^>]+src=["']([^"']+)["']/gi) || []
-      for (const match of imgMatches) {
-        const srcMatch = match.match(/src=["']([^"']+)["']/)
-        if (srcMatch && srcMatch[1]) {
-          // Make sure URL is absolute
-          const imageUrl = srcMatch[1].startsWith('http') 
-            ? srcMatch[1] 
-            : `https://www.bibliotekiwarszawy.pl${srcMatch[1]}`
-          images.push(imageUrl)
+      
+      const jsonData = JSON.parse(`[${jsonLdMatch[1]}]`)
+      logger.info(`Found ${jsonData.length} JSON-LD events`)
+      
+      for (const eventData of jsonData) {
+        try {
+          if (eventData['@type'] === 'Event') {
+            const event = this.parseJsonLdEvent(eventData)
+            if (event) {
+              events.push(event)
+            }
+          }
+        } catch (error) {
+          logger.error('Failed to parse JSON-LD event', { error })
         }
       }
+    } catch (error) {
+      logger.error('Failed to parse JSON-LD events', { error })
     }
     
-    // Check enclosure
-    if (item.enclosure && item.enclosure.url) {
-      images.push(item.enclosure.url)
-    }
-    
-    return images.slice(0, 3)
+    return events
   }
   
-  private parseDate(dateStr: string | undefined): Date | null {
-    if (!dateStr) return null
-    
+  private parseJsonLdEvent(eventData: any): ScrapedEvent | null {
     try {
-      return new Date(dateStr)
-    } catch {
+      const title = eventData.name
+      const description = this.cleanHtmlContent(eventData.description || '')
+      const startDate = new Date(eventData.startDate)
+      const endDate = eventData.endDate ? new Date(eventData.endDate) : null
+      const url = eventData.url
+      const image = eventData.image
+      
+      if (!title || !startDate || isNaN(startDate.getTime())) {
+        return null
+      }
+      
+      // Only accept events from 2025 onwards
+      if (startDate.getFullYear() < 2025) {
+        return null
+      }
+      
+      // Filter for children/family events
+      const fullText = `${title} ${description}`.toLowerCase()
+      if (!this.isChildrenEvent(fullText)) {
+        return null
+      }
+      
+      // Extract location information
+      let locationName = 'Biblioteka Publiczna'
+      let address = 'Warszawa'
+      
+      if (eventData.location) {
+        locationName = eventData.location.name || locationName
+        if (eventData.location.address) {
+          const addr = eventData.location.address
+          address = `${addr.streetAddress || ''} ${addr.addressLocality || 'Warszawa'}`.trim()
+        }
+      }
+      
+      // Extract age range and category
+      const ageRange = this.extractAgeRange(fullText)
+      const category = this.mapCategory(fullText)
+      
+      // Get coordinates for Warsaw
+      const coordinates = { lat: 52.2297, lng: 21.0122 } // Warsaw center
+      
+      return {
+        title: this.normalizeText(title),
+        description: description || 'Wydarzenie biblioteczne w Warszawie',
+        ageMin: ageRange.min || 3,
+        ageMax: ageRange.max || 16,
+        priceType: 'FREE', // Library events are free
+        locationName: this.normalizeText(locationName),
+        address,
+        city: 'Warszawa',
+        lat: coordinates.lat,
+        lng: coordinates.lng,
+        organizerName: 'Biblioteka Publiczna m.st. Warszawy',
+        sourceUrl: url || this.sourceUrl,
+        imageUrls: image ? [image] : [],
+        startDate,
+        category,
+        tags: ['biblioteka', 'kultura', 'edukacja', 'warszawa', '2025']
+      }
+    } catch (error) {
+      logger.error('Error parsing JSON-LD event', { error })
       return null
     }
   }
   
-  private async geocodeAddress(address: string): Promise<{ lat: number; lng: number }> {
+  private parseHtmlEvents(htmlContent: string): ScrapedEvent[] {
+    const events: ScrapedEvent[] = []
+    
     try {
-      const response = await axios.get('https://nominatim.openstreetmap.org/search', {
-        params: {
-          q: address,
-          format: 'json',
-          limit: 1,
-          countrycodes: 'pl'
-        },
-        timeout: 5000,
-        headers: {
-          'User-Agent': 'Events-Agregator-Scraper/1.0'
+      const $ = load(htmlContent)
+      
+      // Find event rows in the HTML
+      $('.tribe-events-calendar-list__event-row').each((index, element) => {
+        try {
+          const event = this.parseHtmlEvent($, $(element))
+          if (event) {
+            events.push(event)
+          }
+        } catch (error) {
+          logger.error(`Failed to parse HTML event ${index}`, { error })
         }
       })
+    } catch (error) {
+      logger.error('Failed to parse HTML events', { error })
+    }
+    
+    return events
+  }
+  
+  private parseHtmlEvent($: any, element: any): ScrapedEvent | null {
+    try {
+      // Extract title
+      const titleElement = element.find('.tribe-events-calendar-list__event-title a')
+      const title = titleElement.text().trim()
+      const url = titleElement.attr('href')
       
-      if (response.data && response.data.length > 0) {
-        const result = response.data[0]
-        return {
-          lat: parseFloat(result.lat),
-          lng: parseFloat(result.lon)
-        }
+      if (!title || title.length < 3) {
+        return null
       }
       
-      // Fallback to Warsaw center coordinates
-      logger.warn(`Failed to geocode address: ${address}, using Warsaw center`)
-      return { lat: 52.2297, lng: 21.0122 }
+      // Extract date
+      const dateElement = element.find('.tribe-events-calendar-list__event-datetime')
+      const dateAttr = dateElement.attr('datetime')
+      const startDate = dateAttr ? new Date(dateAttr) : new Date()
+      
+      // Only accept events from 2025 onwards
+      if (startDate.getFullYear() < 2025) {
+        return null
+      }
+      
+      // Extract description
+      const descElement = element.find('.tribe-events-calendar-list__event-description')
+      const description = descElement.text().trim() || 'Wydarzenie biblioteczne w Warszawie'
+      
+      // Filter for children/family events
+      const fullText = `${title} ${description}`.toLowerCase()
+      if (!this.isChildrenEvent(fullText)) {
+        return null
+      }
+      
+      // Extract age range and category
+      const ageRange = this.extractAgeRange(fullText)
+      const category = this.mapCategory(fullText)
+      
+      return {
+        title: this.normalizeText(title),
+        description: this.normalizeText(description),
+        ageMin: ageRange.min || 3,
+        ageMax: ageRange.max || 16,
+        priceType: 'FREE',
+        locationName: 'Biblioteka Publiczna',
+        address: 'Warszawa',
+        city: 'Warszawa',
+        lat: 52.2297,
+        lng: 21.0122,
+        organizerName: 'Biblioteka Publiczna m.st. Warszawy',
+        sourceUrl: url || this.sourceUrl,
+        imageUrls: [],
+        startDate,
+        category,
+        tags: ['biblioteka', 'kultura', 'edukacja', 'warszawa', '2025']
+      }
     } catch (error) {
-      logger.error(`Geocoding error for address: ${address}`, { error })
-      // Fallback to Warsaw center coordinates
-      return { lat: 52.2297, lng: 21.0122 }
+      return null
     }
+  }
+
+  private filterCurrentEvents(events: ScrapedEvent[]): ScrapedEvent[] {
+    return events.filter(event => {
+      // Only accept events from 2025 onwards
+      const eventYear = event.startDate.getFullYear()
+      return eventYear >= 2025
+    })
+  }
+
+  private removeDuplicates(events: ScrapedEvent[]): ScrapedEvent[] {
+    const seen = new Set<string>()
+    return events.filter(event => {
+      const key = `${event.title.toLowerCase().trim()}_${event.startDate.getTime()}`
+      if (seen.has(key)) {
+        return false
+      }
+      seen.add(key)
+      return true
+    })
+  }
+
+  private cleanHtmlContent(htmlContent: string): string {
+    if (!htmlContent) return ''
+    
+    // Remove HTML tags
+    let cleaned = htmlContent.replace(/<[^>]*>/g, ' ')
+    
+    // Decode HTML entities
+    cleaned = cleaned.replace(/&#8222;/g, '"')
+                    .replace(/&#8221;/g, '"')
+                    .replace(/&quot;/g, '"')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&#8211;/g, '-')
+                    .replace(/&#8217;/g, "'")
+    
+    // Remove boilerplate text patterns
+    cleaned = cleaned.replace(/The post .+ appeared first on .+\./g, '')
+                    .replace(/BIBLIOTEKI PUBLICZNE M\.ST\. WARSZAWY/g, '')
+                    .replace(/Read the full article\.\.\./g, '')
+                    .replace(/\\n/g, ' ')
+    
+    // Clean whitespace
+    cleaned = cleaned.replace(/\s+/g, ' ').trim()
+    
+    return cleaned
+  }
+
+  private isChildrenEvent(text: string): boolean {
+    const childrenKeywords = [
+      'dzieci', 'dziecko', 'dziecięce', 'rodzina', 'rodzinne', 'młodzież',
+      'przedszkolaki', 'maluch', 'najmłodsi', 'warsztat', 'puzzle',
+      'edukacja', 'nauka', 'spektakl', 'teatr', 'czytanie', 'bajka',
+      'gry', 'zabawa', 'animacje', 'kreatywn', 'plastyczn'
+    ]
+    
+    // Must contain at least one children-related keyword
+    const hasChildrenKeyword = childrenKeywords.some(keyword => text.includes(keyword))
+    
+    // Exclude clearly adult-only content
+    const adultKeywords = ['18+', 'dorośli tylko', 'seniorzy', 'emeryt', 'uniwersytet trzeciego wieku']
+    const isAdultOnly = adultKeywords.some(keyword => text.includes(keyword))
+    
+    return hasChildrenKeyword && !isAdultOnly
+  }
+
+  protected mapCategory(text: string): 'WARSZTATY' | 'SPEKTAKLE' | 'SPORT' | 'EDUKACJA' | 'INNE' {
+    const lowerText = text.toLowerCase()
+    
+    if (lowerText.match(/warsztat|puzzle|kreatywn|plastyczn|rękodzieł/)) {
+      return 'WARSZTATY'
+    }
+    if (lowerText.match(/spektakl|teatr|koncert|przedstawienie|muzyk/)) {
+      return 'SPEKTAKLE'
+    }
+    if (lowerText.match(/sport|gry ruchowe|aktywność fizyczna/)) {
+      return 'SPORT'
+    }
+    if (lowerText.match(/edukacja|nauka|lekcje|czytanie|książka/)) {
+      return 'EDUKACJA'
+    }
+    
+    return 'INNE'
+  }
+
+  protected extractAgeRange(text: string): { min: number; max: number } {
+    const lowerText = text.toLowerCase()
+    
+    // Specific age patterns
+    const agePatterns = [
+      { pattern: /dla dzieci (\d+)-(\d+) lat/i, extract: (m: RegExpMatchArray) => ({ min: parseInt(m[1]), max: parseInt(m[2]) }) },
+      { pattern: /(\d+)-(\d+) lat/i, extract: (m: RegExpMatchArray) => ({ min: parseInt(m[1]), max: parseInt(m[2]) }) },
+      { pattern: /od (\d+) lat/i, extract: (m: RegExpMatchArray) => ({ min: parseInt(m[1]) }) },
+      { pattern: /(\d+)\+/i, extract: (m: RegExpMatchArray) => ({ min: parseInt(m[1]) }) }
+    ]
+    
+    for (const { pattern, extract } of agePatterns) {
+      const match = lowerText.match(pattern)
+      if (match) {
+        const result = extract(match)
+        return {
+          min: result.min ?? 3,
+          max: result.max ?? 16
+        }
+      }
+    }
+    
+    // Keyword-based age ranges
+    if (lowerText.includes('niemowląt') || lowerText.includes('maluch')) {
+      return { min: 0, max: 3 }
+    }
+    if (lowerText.includes('przedszkolak')) {
+      return { min: 3, max: 6 }
+    }
+    if (lowerText.includes('puzzle') || lowerText.includes('klub')) {
+      return { min: 6, max: 16 }
+    }
+    if (lowerText.includes('dzieci')) {
+      return { min: 3, max: 12 }
+    }
+    if (lowerText.includes('młodzież')) {
+      return { min: 13, max: 18 }
+    }
+    if (lowerText.includes('rodzinne')) {
+      return { min: 0, max: 18 }
+    }
+    
+    return { min: 3, max: 16 }
+  }
+  
+  protected normalizeText(text: string): string {
+    return text
+      .replace(/\s+/g, ' ')
+      .replace(/[""„"]/g, '"')
+      .replace(/['']/g, "'")
+      .replace(/[–—]/g, '-')
+      .trim()
   }
 }

@@ -2,6 +2,7 @@ import { Queue, Worker, Job } from 'bullmq'
 import Redis from 'ioredis'
 import { logger } from '../utils/logger'
 import { ScraperManager } from '../scrapers/scraper-manager'
+import { statusManager } from '../jobs/status-manager'
 
 // Redis connection
 const connection = process.env.REDIS_URL 
@@ -12,8 +13,8 @@ const connection = process.env.REDIS_URL
       maxRetriesPerRequest: null,
     })
 
-// Queue for scraping jobs
-export const scrapingQueue = new Queue('scraping', {
+// Queue for all background jobs (scraping, status management, etc.)
+export const backgroundQueue = new Queue('background-jobs', {
   connection,
   defaultJobOptions: {
     removeOnComplete: {
@@ -31,25 +32,40 @@ export const scrapingQueue = new Queue('scraping', {
   },
 })
 
-// Worker to process scraping jobs
-export const createScrapingWorker = () => {
+// Worker to process all background jobs
+export const createBackgroundWorker = () => {
   const scraperManager = new ScraperManager()
   
   const worker = new Worker(
-    'scraping',
+    'background-jobs',
     async (job: Job) => {
-      const { scraperName, options } = job.data
-      logger.info(`Processing scraping job: ${scraperName}`, { jobId: job.id })
+      const { type } = job.data
+      logger.info(`Processing background job: ${type}`, { jobId: job.id })
       
       try {
-        const result = await scraperManager.runScraper(scraperName, options)
-        logger.info(`Scraping completed: ${scraperName}`, { 
-          jobId: job.id, 
-          eventsFound: result.eventsCount 
-        })
-        return result
+        switch (type) {
+          case 'scraper':
+            const { scraperName, options } = job.data
+            const result = await scraperManager.runScraper(scraperName, options)
+            logger.info(`Scraping completed: ${scraperName}`, { 
+              jobId: job.id, 
+              eventsFound: result.eventsCount 
+            })
+            return result
+            
+          case 'status-update':
+            const statusResult = await statusManager.updateExpiredEvents()
+            logger.info(`Status update completed`, { 
+              jobId: job.id, 
+              updatedCount: statusResult.updatedCount 
+            })
+            return statusResult
+            
+          default:
+            throw new Error(`Unknown job type: ${type}`)
+        }
       } catch (error) {
-        logger.error(`Scraping failed: ${scraperName}`, { 
+        logger.error(`Background job failed: ${type}`, { 
           jobId: job.id, 
           error: error instanceof Error ? error.message : error 
         })
@@ -58,7 +74,7 @@ export const createScrapingWorker = () => {
     },
     {
       connection,
-      concurrency: 5, // Run max 5 scrapers concurrently
+      concurrency: 5, // Run max 5 jobs concurrently
     }
   )
 
@@ -73,20 +89,37 @@ export const createScrapingWorker = () => {
   return worker
 }
 
-// Schedule scrapers
-export const scheduleScraping = async () => {
-  // Schedule immediate scraping for all scrapers
-  const scrapers = ['biblioteki-warszawa', 'centrum-nauki-kopernik', 'example-rss']
+// Schedule all background jobs
+export const scheduleBackgroundJobs = async () => {
+  // Schedule status updates (every hour)
+  await backgroundQueue.add(
+    'status-update',
+    { type: 'status-update' },
+    {
+      repeat: {
+        pattern: '0 * * * *', // Run every hour
+      },
+      jobId: 'scheduled-status-update',
+    }
+  )
+  logger.info('Scheduled status updates (hourly)')
+  
+  // Schedule scrapers (every 2 hours)
+  const scrapers = ['biblioteki-warszawa', 'czas-dzieci'] // Working scrapers with fixed URLs
   
   for (const scraperName of scrapers) {
-    await scrapingQueue.add(
-      scraperName,
-      { scraperName, options: {} },
+    await backgroundQueue.add(
+      `scraper-${scraperName}`,
+      { 
+        type: 'scraper',
+        scraperName, 
+        options: {} 
+      },
       {
         repeat: {
           pattern: '0 */2 * * *', // Run every 2 hours
         },
-        jobId: `scheduled-${scraperName}`,
+        jobId: `scheduled-scraper-${scraperName}`,
       }
     )
     logger.info(`Scheduled scraper: ${scraperName}`)

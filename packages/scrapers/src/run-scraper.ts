@@ -7,7 +7,14 @@ import { logger } from './utils/logger'
 dotenv.config({ path: path.join(__dirname, '..', '.env') })
 
 async function main() {
-  const scraperName = process.argv[2]
+  // Parse command line arguments properly
+  let scraperName = process.argv[2]
+  
+  // Handle --name=scraper format
+  if (scraperName && scraperName.startsWith('--name=')) {
+    scraperName = scraperName.replace('--name=', '')
+  }
+  
   const manager = new ScraperManager()
   
   try {
